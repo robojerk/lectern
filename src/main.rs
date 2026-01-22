@@ -3,6 +3,7 @@ mod services;
 use services::{AudioService, BookMetadata, ABSConfig};
 
 use qmetaobject::*;
+use qmetaobject::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
@@ -26,6 +27,14 @@ pub enum UiMessage {
     LogMessage(String),
     ConversionComplete,
     Error(String),
+}
+
+/// Updates sent during conversion process
+#[derive(Debug, Clone)]
+pub enum ConversionUpdate {
+    Progress(f64, String),
+    Log(String),
+    Complete(bool, String),
 }
 
 /// Background task handle for managing async operations
@@ -143,36 +152,52 @@ impl LecternController {
         self.send_ui_message(UiMessage::StatusUpdate(format!("Loaded folder: {}", path.to_string())));
     }
 
-    fn search_metadata(&mut self, query: QString, by_asin: bool) {
+    fn search_metadata(&mut self, query: QString, _by_asin: bool) {
         let query_str = query.to_string();
-        let sender = self.ui_sender.clone().unwrap();
 
-        // Start background metadata search
-        tokio::spawn(async move {
-            // Send initial status
-            let _ = sender.send(UiMessage::ProcessingState(true));
-            let _ = sender.send(UiMessage::StatusUpdate(format!("Searching for '{}'...", query_str)));
-            let _ = sender.send(UiMessage::ProgressUpdate(0.1));
+        // Set loading state immediately on main thread
+        self.is_processing = true;
+        self.status_message = QString::from(format!("Searching for '{}'...", query_str));
+        self.progress_value = 0.1;
+        self.processing_changed();
+        self.status_changed();
+        self.progress_changed();
 
-            // Perform actual API search
-            match AudioService::fetch_metadata(&query_str).await {
-                Ok(metadata) => {
-                    let _ = sender.send(UiMessage::ProgressUpdate(1.0));
-                    let _ = sender.send(UiMessage::MetadataLoaded {
-                        title: metadata.title,
-                        author: metadata.authors.join(", "),
-                        series: metadata.series_name.unwrap_or_default(),
-                        narrator: metadata.narrator_names.map(|n| n.join(", ")).unwrap_or_default(),
-                        cover_url: metadata.cover_url.unwrap_or_default(),
-                    });
-                    let _ = sender.send(UiMessage::StatusUpdate("Metadata search completed".to_string()));
+        // Create thread-safe callback to update UI from background thread
+        let qptr = QPointer::from(&*self);
+        let update_ui = queued_callback(move |result: Result<BookMetadata, String>| {
+            if let Some(pinned) = qptr.as_pinned() {
+                let mut controller = pinned.borrow_mut();
+                match result {
+                    Ok(metadata) => {
+                        controller.progress_value = 1.0;
+                        controller.metadata_title = QString::from(metadata.title);
+                        controller.metadata_author = QString::from(metadata.authors.join(", "));
+                        controller.metadata_series = QString::from(metadata.series_name.unwrap_or_default());
+                        controller.metadata_narrator = QString::from(metadata.narrator_names.map(|n| n.join(", ")).unwrap_or_default());
+                        controller.metadata_cover_url = QString::from(metadata.cover_url.unwrap_or_default());
+                        controller.status_message = QString::from("Metadata search completed");
+                        controller.metadata_changed();
+                        controller.status_changed();
+                        controller.progress_changed();
+                    }
+                    Err(error) => {
+                        controller.status_message = QString::from(format!("Search failed: {}", error));
+                        controller.error_occurred(QString::from(format!("Search failed: {}", error)));
+                        controller.status_changed();
+                    }
                 }
-                Err(error) => {
-                    let _ = sender.send(UiMessage::Error(format!("Search failed: {}", error)));
-                }
+                controller.is_processing = false;
+                controller.processing_changed();
             }
+        });
 
-            let _ = sender.send(UiMessage::ProcessingState(false));
+        // Start background task
+        std::thread::spawn(move || {
+            // Perform the actual API search on background thread
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let result = runtime.block_on(AudioService::fetch_metadata(&query_str));
+            update_ui(result);
         });
     }
 
@@ -208,78 +233,102 @@ impl LecternController {
             library_id: self.abs_library_id.to_string(),
         };
 
-        let sender = self.ui_sender.clone().unwrap();
+        // Set initial loading state on main thread
+        self.is_processing = true;
+        self.status_message = QString::from("Starting audio conversion...");
+        self.progress_value = 0.0;
+        self.processing_changed();
+        self.status_changed();
+        self.progress_changed();
 
-        // Start background conversion pipeline
-        tokio::spawn(async move {
-            let _ = sender.send(UiMessage::ProcessingState(true));
-            let _ = sender.send(UiMessage::StatusUpdate("Starting audio conversion...".to_string()));
-            let _ = sender.send(UiMessage::ProgressUpdate(0.0));
-
-            // Step 1: Validate input
-            let input_dir = PathBuf::from(folder);
-            if !input_dir.exists() {
-                let _ = sender.send(UiMessage::Error("Input directory does not exist".to_string()));
-                let _ = sender.send(UiMessage::ProcessingState(false));
-                return;
-            }
-
-            let _ = sender.send(UiMessage::ProgressUpdate(0.1));
-            let _ = sender.send(UiMessage::StatusUpdate("Scanning audio files...".to_string()));
-
-            // Step 2: Generate output path
-            let output_path = input_dir
-                .parent()
-                .unwrap_or(&input_dir)
-                .join(format!("{}.m4b", metadata.title.replace(":", "").replace("/", "")));
-
-            let _ = sender.send(UiMessage::ProgressUpdate(0.2));
-            let _ = sender.send(UiMessage::StatusUpdate("Converting audio files...".to_string()));
-
-            // Step 3: Convert to M4B
-            match AudioService::convert_to_m4b_with_chapters(&input_dir, &output_path.to_string_lossy(), &metadata).await {
-                Ok(_) => {
-                    let _ = sender.send(UiMessage::ProgressUpdate(0.7));
-                    let _ = sender.send(UiMessage::StatusUpdate("Applying metadata...".to_string()));
-
-                    // Step 4: Apply metadata
-                    match AudioService::apply_tags(&output_path.to_string_lossy(), &metadata).await {
-                        Ok(_) => {
-                            let _ = sender.send(UiMessage::ProgressUpdate(0.9));
-                            let _ = sender.send(UiMessage::StatusUpdate("Uploading to Audiobookshelf...".to_string()));
-
-                            // Step 5: Upload to ABS (if configured)
-                            if !abs_config.host.is_empty() && !abs_config.token.is_empty() {
-                                match AudioService::upload_and_scan(&output_path.to_string_lossy(), &abs_config).await {
-                                    Ok(_) => {
-                                        let _ = sender.send(UiMessage::ProgressUpdate(1.0));
-                                        let _ = sender.send(UiMessage::StatusUpdate("Conversion and upload completed!".to_string()));
-                                        let _ = sender.send(UiMessage::ConversionComplete);
-                                    }
-                                    Err(e) => {
-                                        let _ = sender.send(UiMessage::ProgressUpdate(1.0));
-                                        let _ = sender.send(UiMessage::StatusUpdate("Conversion completed, upload failed".to_string()));
-                                        let _ = sender.send(UiMessage::LogMessage(format!("Upload error: {}", e)));
-                                        let _ = sender.send(UiMessage::ConversionComplete);
-                                    }
-                                }
-                            } else {
-                                let _ = sender.send(UiMessage::ProgressUpdate(1.0));
-                                let _ = sender.send(UiMessage::StatusUpdate("Conversion completed!".to_string()));
-                                let _ = sender.send(UiMessage::ConversionComplete);
-                            }
+        // Create thread-safe callback for conversion updates
+        let qptr = QPointer::from(&*self);
+        let update_progress = queued_callback(move |update: ConversionUpdate| {
+            if let Some(pinned) = qptr.as_pinned() {
+                let mut controller = pinned.borrow_mut();
+                match update {
+                    ConversionUpdate::Progress(progress, message) => {
+                        controller.progress_value = progress;
+                        controller.status_message = QString::from(message);
+                        controller.progress_changed();
+                        controller.status_changed();
+                    }
+                    ConversionUpdate::Log(message) => {
+                        controller.log_message(QString::from(message));
+                    }
+                    ConversionUpdate::Complete(success, message) => {
+                        controller.progress_value = 1.0;
+                        controller.status_message = QString::from(message.clone());
+                        controller.is_processing = false;
+                        if success {
+                            controller.conversion_completed();
+                        } else {
+                            controller.error_occurred(QString::from(message));
                         }
-                        Err(e) => {
-                            let _ = sender.send(UiMessage::Error(format!("Metadata application failed: {}", e)));
-                        }
+                        controller.progress_changed();
+                        controller.status_changed();
+                        controller.processing_changed();
                     }
                 }
-                Err(e) => {
-                    let _ = sender.send(UiMessage::Error(format!("Conversion failed: {}", e)));
-                }
             }
+        });
 
-            let _ = sender.send(UiMessage::ProcessingState(false));
+        // Start background conversion
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async {
+                update_progress(ConversionUpdate::Progress(0.1, "Scanning audio files...".to_string()));
+
+                // Validate input
+                let input_dir = PathBuf::from(folder);
+                if !input_dir.exists() {
+                    update_progress(ConversionUpdate::Complete(false, "Input directory does not exist".to_string()));
+                    return;
+                }
+
+                // Generate output path
+                let output_path = input_dir
+                    .parent()
+                    .unwrap_or(&input_dir)
+                    .join(format!("{}.m4b", metadata.title.replace(":", "").replace("/", "")));
+
+                update_progress(ConversionUpdate::Progress(0.2, "Converting audio files...".to_string()));
+
+                // Convert to M4B
+                match AudioService::convert_to_m4b_with_chapters(&input_dir, &output_path.to_string_lossy(), &metadata).await {
+                    Ok(_) => {
+                        update_progress(ConversionUpdate::Progress(0.7, "Applying metadata...".to_string()));
+
+                        // Apply metadata
+                        match AudioService::apply_tags(&output_path.to_string_lossy(), &metadata).await {
+                            Ok(_) => {
+                                update_progress(ConversionUpdate::Progress(0.9, "Uploading to Audiobookshelf...".to_string()));
+
+                                // Upload to ABS if configured
+                                if !abs_config.host.is_empty() && !abs_config.token.is_empty() {
+                                    match AudioService::upload_and_scan(&output_path.to_string_lossy(), &abs_config).await {
+                                        Ok(_) => {
+                                            update_progress(ConversionUpdate::Complete(true, "Conversion and upload completed!".to_string()));
+                                        }
+                                        Err(e) => {
+                                            update_progress(ConversionUpdate::Log(format!("Upload error: {}", e)));
+                                            update_progress(ConversionUpdate::Complete(true, "Conversion completed, upload failed".to_string()));
+                                        }
+                                    }
+                                } else {
+                                    update_progress(ConversionUpdate::Complete(true, "Conversion completed!".to_string()));
+                                }
+                            }
+                            Err(e) => {
+                                update_progress(ConversionUpdate::Complete(false, format!("Metadata application failed: {}", e)));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        update_progress(ConversionUpdate::Complete(false, format!("Conversion failed: {}", e)));
+                    }
+                }
+            });
         });
     }
 
