@@ -150,19 +150,49 @@ impl AudioService {
         let concat_file = format!("{}.txt", output_path);
         Self::create_concat_file(&mp3_files, &concat_file).await?;
 
-        // Run ffmpeg conversion
+        // Run ffmpeg conversion with metadata
+        let mut ffmpeg_args = vec![
+            "-f", "concat",
+            "-safe", "0",
+            "-i", &concat_file,
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+        ];
+
+        // Add metadata - create owned strings to avoid lifetime issues
+        let title_metadata = format!("title={}", metadata.title);
+        let artist_metadata = format!("artist={}", metadata.authors.join(", "));
+        ffmpeg_args.extend_from_slice(&[
+            "-metadata", &title_metadata,
+            "-metadata", &artist_metadata,
+        ]);
+
+        if let Some(series) = &metadata.series_name {
+            let album_metadata = format!("album={}", series);
+            ffmpeg_args.extend_from_slice(&[
+                "-metadata", &album_metadata,
+            ]);
+        }
+
+        if let Some(narrators) = &metadata.narrator_names {
+            let composer_metadata = format!("composer={}", narrators.join(", "));
+            ffmpeg_args.extend_from_slice(&[
+                "-metadata", &composer_metadata,
+            ]);
+        }
+
+        if let Some(duration) = metadata.duration_minutes {
+            let duration_metadata = format!("duration={}", duration);
+            ffmpeg_args.extend_from_slice(&[
+                "-metadata", &duration_metadata,
+            ]);
+        }
+
+        ffmpeg_args.push(&output_path);
+
         let status = Command::new("ffmpeg")
-            .args(&[
-                "-f", "concat",
-                "-safe", "0",
-                "-i", &concat_file,
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-movflags", "+faststart",
-                "-metadata", &format!("title={}", metadata.title),
-                "-metadata", &format!("artist={}", metadata.authors.join(", ")),
-                &output_path
-            ])
+            .args(&ffmpeg_args)
             .status()
             .await
             .map_err(|e| format!("FFmpeg failed: {}", e))?;
@@ -178,7 +208,7 @@ impl AudioService {
     }
 
     /// Find all MP3 files in a directory
-    async fn find_mp3_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    pub async fn find_mp3_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
         let mut mp3_files = Vec::new();
 
         let mut entries = tokio::fs::read_dir(dir)
@@ -200,7 +230,10 @@ impl AudioService {
         let mut content = String::new();
 
         for file in files {
-            let path_str = file.to_string_lossy();
+            // Use absolute paths for FFmpeg concat demuxer to avoid issues
+            let abs_path = file.canonicalize()
+                .map_err(|e| format!("Failed to get absolute path for {}: {}", file.display(), e))?;
+            let path_str = abs_path.to_string_lossy();
             content.push_str(&format!("file '{}'\n", path_str));
         }
 
@@ -213,14 +246,21 @@ impl AudioService {
 
     /// Apply metadata tags to M4B file
     pub async fn apply_tags(file_path: &str, metadata: &BookMetadata) -> Result<(), String> {
-        // TODO: Implement metadata tagging with audiotags
-        // For now, just log that we'd apply tags
-        println!("TODO: Would apply metadata tags to {}", file_path);
+        // For now, use FFmpeg to add metadata during the conversion process
+        // This is more reliable than trying to modify tags after creation
+        println!("Metadata will be applied during FFmpeg conversion:");
         println!("  Title: {}", metadata.title);
-        println!("  Author: {:?}", metadata.authors);
+        println!("  Author: {}", metadata.authors.join(", "));
         if let Some(series) = &metadata.series_name {
             println!("  Series: {}", series);
         }
+        if let Some(narrators) = &metadata.narrator_names {
+            println!("  Narrators: {}", narrators.join(", "));
+        }
+
+        // TODO: Implement proper metadata tagging with audiotags after conversion
+        // The FFmpeg command in convert_to_m4b_with_chapters already includes basic metadata
+
         Ok(())
     }
 

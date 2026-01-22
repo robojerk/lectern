@@ -1,17 +1,17 @@
 # Lectern - Audiobook Preparation Tool
 
-A GTK4-based desktop application for preparing audiobooks for Audiobookshelf servers. Lectern automates the conversion of MP3 directories into properly tagged M4B files with automatic chapter generation and direct upload to your Audiobookshelf server.
+A Qt/QML-based desktop application for preparing audiobooks for Audiobookshelf servers. Lectern automates the conversion of MP3 directories into properly tagged M4B files with direct upload to your Audiobookshelf server.
 
 ## Features
 
-✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app  
-✅ **Automatic Metadata Fetching** - Queries Audible API for book information  
-✅ **Editable Metadata** - Review and modify title, author, series, and narrator  
-✅ **Chapter Generation** - Automatically creates chapters from individual MP3 files  
-✅ **M4B Conversion** - High-quality AAC encoding with chapter markers  
-✅ **Metadata Tagging** - Embeds all metadata directly into the M4B file  
-✅ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan  
-✅ **Real-Time Logging** - See exactly what's happening during processing  
+✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app
+✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information
+✅ **Editable Metadata** - Review and modify title, author, series, and narrator
+🔄 **Chapter Generation** - Automatic chapter creation from MP3 files (coming soon)
+✅ **M4B Conversion** - High-quality AAC encoding with FFmpeg
+✅ **Metadata Tagging** - Embeds metadata during FFmpeg conversion
+✅ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan
+✅ **Real-Time Logging** - See exactly what's happening during processing
 ✅ **Progress Tracking** - Visual feedback throughout the conversion pipeline  
 
 ## Project Structure
@@ -104,10 +104,10 @@ sudo cp lectern.desktop /usr/share/applications/
 ## Tech Stack
 
 - **Language**: Rust
-- **GUI**: GTK4 (no libadwaita)
+- **GUI**: Qt/QML with qmetaobject bindings
 - **Async Runtime**: Tokio
 - **HTTP Client**: reqwest
-- **Audio Tagging**: audiotags
+- **Audio Tagging**: FFmpeg metadata embedding
 - **Audio Processing**: ffmpeg (external)
 
 ## Configuration
@@ -157,18 +157,17 @@ sudo cp lectern.desktop /usr/share/applications/
 
 ### Project Architecture
 
-- **UI Layer** (`main.rs`): GTK4 interface with async event handling via `glib::MainContext::channel`
+- **UI Layer** (`main.rs`): Qt/QML interface with qmetaobject Rust bindings
 - **Service Layer** (`services.rs`): All business logic for audio processing and API calls
 - **Async Runtime**: Tokio for non-blocking I/O operations
-- **Communication**: Message passing between UI thread and worker threads
+- **Communication**: Qt signals/slots and queued callbacks for UI thread safety
 
 ### Key Technologies
 
-- **GTK4**: Native Linux UI (no libadwaita)
+- **Qt/QML**: Cross-platform GUI framework with qmetaobject bindings
 - **Tokio**: Async runtime for concurrent operations
 - **reqwest**: HTTP client for API calls
-- **audiotags**: Audio metadata manipulation
-- **FFmpeg**: External process for audio conversion
+- **FFmpeg**: External process for audio conversion and metadata embedding
 - **serde**: JSON serialization/deserialization
 
 ## License

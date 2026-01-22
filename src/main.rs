@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
 
 mod services;
 
@@ -10,6 +8,13 @@ use qmetaobject::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use url::Url;
+
+#[derive(Clone, Debug)]
+pub enum ConversionUpdate {
+    Progress(f64, String),
+    Log(String),
+    Complete(bool, String),
+}
 
 #[derive(QObject, Default)]
 pub struct LecternController {
@@ -98,6 +103,14 @@ impl LecternController {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("lectern")
             .join("config.json");
+
+        // Create the directory if it doesn't exist
+        if let Some(config_dir) = config_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(config_dir) {
+                eprintln!("Failed to create config directory: {}", e);
+                return;
+            }
+        }
 
         let config = serde_json::json!({
             "abs_host": self.abs_host.to_string(),
@@ -224,20 +237,28 @@ impl LecternController {
 
         // Create thread-safe callback for conversion updates
         let qptr = QPointer::from(&*self);
-        let update_progress = queued_callback(move |update: Result<String, String>| {
+        let update_progress = queued_callback(move |update: ConversionUpdate| {
             if let Some(pinned) = qptr.as_pinned() {
                 let mut controller = pinned.borrow_mut();
                 match update {
-                    Ok(message) => {
+                    ConversionUpdate::Progress(value, message) => {
+                        controller.progress_value = value;
                         controller.status_message = QString::from(message);
+                        controller.progress_changed();
                         controller.status_changed();
                     }
-                    Err(error) => {
-                        controller.status_message = QString::from(error);
-                        controller.error_occurred(QString::from("Conversion failed"));
+                    ConversionUpdate::Log(message) => {
+                        // For now, just update status. Could add to a log area later
+                        controller.status_message = QString::from(format!("Log: {}", message));
                         controller.status_changed();
+                    }
+                    ConversionUpdate::Complete(success, message) => {
+                        controller.status_message = QString::from(message);
                         controller.is_processing = false;
                         controller.processing_changed();
+                        controller.progress_value = if success { 1.0 } else { 0.0 };
+                        controller.progress_changed();
+                        controller.status_changed();
                     }
                 }
             }
@@ -248,10 +269,22 @@ impl LecternController {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let result = runtime.block_on(async {
                 // Validate input
+                update_progress(ConversionUpdate::Progress(0.05, "Validating input directory...".to_string()));
                 let input_dir = PathBuf::from(folder);
                 if !input_dir.exists() {
                     return Err("Input directory does not exist".to_string());
                 }
+
+                // Check for MP3 files
+                update_progress(ConversionUpdate::Progress(0.1, "Scanning audio files...".to_string()));
+                let mp3_files = AudioService::find_mp3_files(&input_dir).await
+                    .map_err(|e| format!("Failed to scan files: {}", e))?;
+
+                if mp3_files.is_empty() {
+                    return Err("No MP3 files found in directory".to_string());
+                }
+
+                update_progress(ConversionUpdate::Progress(0.2, format!("Found {} audio files", mp3_files.len())));
 
                 // Generate output path
                 let output_path = input_dir
@@ -259,18 +292,24 @@ impl LecternController {
                     .unwrap_or(&input_dir)
                     .join(format!("{}.m4b", metadata.title.replace(":", "").replace("/", "")));
 
+                update_progress(ConversionUpdate::Progress(0.3, "Converting audio files...".to_string()));
+
                 // Convert to M4B
                 AudioService::convert_to_m4b_with_chapters(&input_dir, &output_path.to_string_lossy(), &metadata).await?;
 
+                update_progress(ConversionUpdate::Progress(0.8, "Applying metadata tags...".to_string()));
+
                 // Apply metadata
                 AudioService::apply_tags(&output_path.to_string_lossy(), &metadata).await?;
+
+                update_progress(ConversionUpdate::Progress(0.9, "Uploading to Audiobookshelf...".to_string()));
 
                 // Upload to ABS if configured
                 if !abs_config.host.is_empty() && !abs_config.token.is_empty() {
                     match AudioService::upload_and_scan(&output_path.to_string_lossy(), &abs_config).await {
                         Ok(_) => Ok("Conversion and upload completed!".to_string()),
                         Err(e) => {
-                            println!("Upload error: {}", e);
+                            update_progress(ConversionUpdate::Log(format!("Upload error: {}", e)));
                             Ok("Conversion completed, upload failed".to_string())
                         }
                     }
@@ -300,7 +339,11 @@ fn main() {
 
     // Initialize Qt environment (Crucial for GUI)
     if std::env::var("QT_QPA_PLATFORM").is_err() {
-        std::env::set_var("QT_QPA_PLATFORM", "xcb");
+        // Set Qt platform backend - try Wayland first, fallback to X11/xcb on Linux
+        #[cfg(target_os = "linux")]
+        {
+            std::env::set_var("QT_QPA_PLATFORM", "wayland;xcb");
+        }
     }
     init_qt_to_rust();
 
