@@ -38,20 +38,36 @@ ApplicationWindow {
         anchors.topMargin: tabBar.height
         currentIndex: tabBar.currentIndex
 
-        MetadataTab {
-            controller: controller
+        Item {
+            Text {
+                anchors.centerIn: parent
+                text: "Metadata Tab - Controller: " + (controller ? controller.status_message : "Not loaded")
+                font.pixelSize: 18
+            }
         }
 
-        ConvertTab {
-            controller: controller
+        Item {
+            Text {
+                anchors.centerIn: parent
+                text: "Convert Tab"
+                font.pixelSize: 18
+            }
         }
 
-        ChaptersTab {
-            controller: controller
+        Item {
+            Text {
+                anchors.centerIn: parent
+                text: "Chapters Tab"
+                font.pixelSize: 18
+            }
         }
 
-        CoverTab {
-            controller: controller
+        Item {
+            Text {
+                anchors.centerIn: parent
+                text: "Cover Tab"
+                font.pixelSize: 18
+            }
         }
     }
 

@@ -121,7 +121,7 @@ impl LecternController {
             if let Err(e) = std::fs::write(config_path, json) {
                 eprintln!("Failed to save config: {}", e);
             } else {
-                println!("⚙️ Settings saved for: {}", self.abs_host.to_string());
+                println!("⚙️ Settings saved for: {}", self.abs_host);
             }
         }
     }
@@ -174,7 +174,7 @@ impl LecternController {
                 // Grab the first result and update search result properties
                 if let Some(book) = results.first() {
                     s.search_title = book.title.clone().into();
-                    s.search_author = book.author().into();
+                    s.search_author = book.authors.join(", ").into();
                     s.search_cover_url = book.image_url.clone().into();
                     s.status_message = QString::from("Search completed");
                 } else {
@@ -352,7 +352,9 @@ fn main() {
     init_qt_to_rust();
 
     // Create and register the controller
-    let controller = RefCell::new(LecternController::default());
+    let mut controller = LecternController::default();
+    controller.initialize(); // Load config and initialize
+    let controller = RefCell::new(controller);
     let controller_pinned = unsafe { QObjectPinned::new(&controller) };
     let mut engine = QmlEngine::new();
 
@@ -362,7 +364,7 @@ fn main() {
     engine.set_object_property("controller".into(), controller_pinned);
 
     // Load the UI
-    engine.load_file("qml/main.qml".into());
+    engine.load_file("main.qml".into());
 
     // Start the event loop (This blocks until the window is closed)
     engine.exec();

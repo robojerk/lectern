@@ -18,13 +18,10 @@ pub struct BookMetadata {
 }
 
 // Convenience methods for QML compatibility
-impl BookMetadata {
-    pub fn author(&self) -> String {
-        self.authors.join(", ")
-    }
-}
+// Note: author() method removed as it's no longer used
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Placeholder for future chapter management feature
 pub struct Chapter {
     pub title: String,
     pub start_time: f64,
@@ -41,6 +38,7 @@ pub struct ABSConfig {
 // --- API Response Structures ---
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Some fields may be unused but kept for future API features
 pub struct AudnexusSearchResponse {
     pub asin: String,
     pub authors: Vec<String>,
@@ -53,11 +51,13 @@ pub struct AudnexusSearchResponse {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Some fields may be unused but kept for future API features
 pub struct AudnexusSearchResult {
     pub result: Vec<AudnexusSearchResponse>,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Some fields may be unused but kept for future API features
 pub struct AudibleProduct {
     pub asin: String,
     pub authors: Vec<String>,
@@ -71,6 +71,7 @@ pub struct AudibleProduct {
 
 // --- Audio Service Implementation ---
 
+#[allow(dead_code)] // Never constructed - used only for associated functions
 pub struct AudioService;
 
 impl AudioService {
@@ -300,17 +301,17 @@ impl AudioService {
         // Parse response to get the uploaded item ID
         #[derive(Deserialize)]
         struct UploadResponse {
-            id: Option<String>,
+            _id: Option<String>, // Currently unused but kept for future use
         }
 
         let upload_result: UploadResponse = response
             .json()
             .await
-            .unwrap_or(UploadResponse { id: None });
+            .unwrap_or(UploadResponse { _id: None });
 
-        if let Some(item_id) = upload_result.id {
+        if let Some(item_id) = upload_result._id {
             // Trigger library scan
-            Self::trigger_library_scan(&client, &config, &item_id).await?;
+            Self::trigger_library_scan(&client, config, &item_id).await?;
         }
 
         Ok(())
