@@ -2,17 +2,16 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
+import Qt.labs.platform 1.1
 
 Item {
-    property var controller
-
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
         spacing: 20
 
         Label {
-            text: "Cover Art Preview"
+            text: "Cover Art"
             font.bold: true
             font.pixelSize: 18
         }
@@ -24,22 +23,25 @@ Item {
             radius: 8
 
             Image {
+                id: coverImage
                 anchors.centerIn: parent
                 source: controller ? controller.metadata_cover_url : ""
                 fillMode: Image.PreserveAspectFit
-                width: Math.min(parent.width - 40, 400)
-                height: Math.min(parent.height - 40, 600)
+                width: Math.min(parent.width - 40, 350)
+                height: Math.min(parent.height - 40, 500)
 
                 Rectangle {
                     anchors.fill: parent
-                    color: Material.color(Material.Grey, Material.Shade700)
+                    color: "transparent"
                     visible: parent.status !== Image.Ready
-                    radius: 4
 
                     Label {
                         anchors.centerIn: parent
-                        text: parent.parent.status === Image.Loading ? "Loading..." : 
-                              controller && controller.metadata_cover_url === "" ? "No cover art" : "Failed to load"
+                        text: {
+                            if (parent.parent.status === Image.Loading) return "Loading..."
+                            if (!controller || controller.metadata_cover_url === "") return "No cover"
+                            return "Failed to load"
+                        }
                         opacity: 0.5
                     }
                 }
@@ -48,33 +50,38 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
 
             TextField {
-                id: coverUrlField
-                placeholderText: "Enter cover image URL..."
+                id: urlField
+                placeholderText: "Cover image URL..."
                 text: controller ? controller.metadata_cover_url : ""
                 Layout.fillWidth: true
-                onTextChanged: {
-                    if (controller && text !== controller.metadata_cover_url) controller.metadata_cover_url = text
+            }
+
+            Button {
+                text: "Load"
+                onClicked: {
+                    if (controller) {
+                        controller.metadata_cover_url = urlField.text
+                    }
                 }
             }
 
             Button {
-                text: "Apply"
-                onClicked: {
-                    if (controller) {
-                        controller.metadata_cover_url = coverUrlField.text
-                    }
-                }
+                text: "Browse..."
+                onClicked: fileDialog.open()
             }
         }
+    }
 
-        Label {
-            text: "Tip: Search for metadata first to automatically get cover art"
-            font.pixelSize: 12
-            opacity: 0.6
-            Layout.fillWidth: true
+    FileDialog {
+        id: fileDialog
+        title: "Select Cover Image"
+        nameFilters: ["Images (*.jpg *.jpeg *.png)"]
+        onAccepted: {
+            if (controller) {
+                controller.metadata_cover_url = file.toString()
+            }
         }
     }
 }

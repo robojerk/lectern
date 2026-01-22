@@ -4,17 +4,12 @@ import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 
 Item {
-    property var controller
-
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
-        spacing: 20
+        spacing: 16
 
         RowLayout {
-            Layout.fillWidth: true
-            spacing: 12
-
             Label {
                 text: "Chapters"
                 font.bold: true
@@ -28,81 +23,62 @@ Item {
                 enabled: controller && controller.current_folder !== ""
                 onClicked: {
                     if (controller) {
-                        controller.scan_chapters_trigger = true
+                        controller.scan_chapters()
                     }
                 }
             }
         }
 
-        ListView {
-            id: chapterList
+        GroupBox {
+            title: "Chapter List"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            spacing: 4
 
-            // Parse JSON from Rust controller
-            model: controller && controller.chapters_json ? JSON.parse(controller.chapters_json) : []
+            ScrollView {
+                anchors.fill: parent
+                clip: true
 
-            delegate: Pane {
-                width: chapterList.width
-                padding: 8
-                
-                Material.elevation: 1
-                
-                background: Rectangle {
-                    color: Material.color(Material.Grey, Material.Shade800)
-                    radius: 4
-                    border.width: 0
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    spacing: 12
-
-                    Label {
-                        text: (modelData.index + 1)
-                        font.bold: true
-                        color: Material.accent
-                        Layout.preferredWidth: 30
-                        horizontalAlignment: Text.AlignRight
+                ListView {
+                    model: ListModel {
+                        ListElement { number: 1; title: "Chapter 1"; duration: "15:23" }
+                        ListElement { number: 2; title: "Chapter 2"; duration: "18:45" }
+                        ListElement { number: 3; title: "Chapter 3"; duration: "22:12" }
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
+                    spacing: 4
+                    delegate: Rectangle {
+                        width: ListView.view.width
+                        height: 50
+                        color: index % 2 === 0 ? 
+                            Material.color(Material.Grey, Material.Shade900) :
+                            Material.color(Material.Grey, Material.Shade800)
+                        radius: 4
 
-                        Label {
-                            text: modelData.title
-                            font.bold: true
-                            Layout.fillWidth: true
-                            elide: Text.ElideMiddle
-                        }
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 12
 
-                        Label {
-                            text: modelData.path
-                            opacity: 0.6
-                            font.pixelSize: 10
-                            Layout.fillWidth: true
-                            elide: Text.ElideMiddle
-                        }
-                    }
+                            Label {
+                                text: model.number
+                                font.bold: true
+                                Layout.preferredWidth: 30
+                            }
 
-                    ToolButton {
-                        text: "▶️"
-                        ToolTip.text: "Play Preview"
-                        ToolTip.visible: hovered
-                        onClicked: { 
-                            if(controller) controller.playing_chapter_index = modelData.index 
-                        }
-                    }
+                            TextField {
+                                text: model.title
+                                Layout.fillWidth: true
+                                background: Rectangle {
+                                    color: "transparent"
+                                    border.width: 0
+                                }
+                            }
 
-                    ToolButton {
-                        text: "⏹️"
-                        ToolTip.text: "Stop"
-                        ToolTip.visible: hovered
-                        onClicked: { 
-                            if(controller) controller.playback_stop_trigger = true 
+                            Label {
+                                text: model.duration
+                                opacity: 0.7
+                                Layout.preferredWidth: 60
+                            }
                         }
                     }
                 }
@@ -110,11 +86,10 @@ Item {
         }
 
         Label {
-            text: "Chapters will be automatically detected from folder structure or can be manually added"
-            font.pixelSize: 12
+            text: "Chapters will be auto-detected from MP3 files or folder structure"
+            font.pixelSize: 11
             opacity: 0.6
             Layout.fillWidth: true
-            wrapMode: Text.Wrap
         }
     }
 }

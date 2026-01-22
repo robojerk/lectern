@@ -4,12 +4,10 @@ import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 
 Item {
-    property var controller
-
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
-        spacing: 30
+        spacing: 24
 
         Label {
             text: "Convert to M4B"
@@ -17,130 +15,147 @@ Item {
             font.pixelSize: 18
         }
 
-        // Summary of current settings
+        // Summary
         GroupBox {
-            title: "Conversion Summary"
+            title: "Ready to Convert"
             Layout.fillWidth: true
 
             GridLayout {
                 anchors.fill: parent
                 columns: 2
-                columnSpacing: 16
-                rowSpacing: 12
+                columnSpacing: 12
+                rowSpacing: 8
 
-                Label { text: "Source Folder:" ; font.bold: true }
                 Label {
-                    text: controller && controller.current_folder !== "" ? controller.current_folder : "Not selected"
+                    text: "Folder:"
+                    font.bold: true
+                }
+                Label {
+                    text: controller && controller.current_folder !== "" ? 
+                        controller.current_folder : "❌ Not selected"
                     Layout.fillWidth: true
                     elide: Text.ElideMiddle
                     opacity: 0.8
                 }
 
-                Label { text: "Title:" ; font.bold: true }
                 Label {
-                    text: controller && controller.metadata_title !== "" ? controller.metadata_title : "Not set"
-                    Layout.fillWidth: true
+                    text: "Title:"
+                    font.bold: true
+                }
+                Label {
+                    text: controller && controller.metadata_title !== "" ?
+                        controller.metadata_title : "❌ Not set"
                     opacity: 0.8
                 }
 
-                Label { text: "Author:" ; font.bold: true }
                 Label {
-                    text: controller && controller.metadata_author !== "" ? controller.metadata_author : "Not set"
-                    Layout.fillWidth: true
+                    text: "Author:"
+                    font.bold: true
+                }
+                Label {
+                    text: controller && controller.metadata_author !== "" ?
+                        controller.metadata_author : "Not set"
                     opacity: 0.8
                 }
 
-                Label { text: "Cover Art:" ; font.bold: true }
                 Label {
-                    text: controller && controller.metadata_cover_url !== "" ? "✓ Set" : "Not set"
-                    Layout.fillWidth: true
-                    opacity: 0.8
-                    color: controller && controller.metadata_cover_url !== "" ? Material.color(Material.Green) : Material.foreground
+                    text: "Cover:"
+                    font.bold: true
+                }
+                Label {
+                    text: controller && controller.metadata_cover_url !== "" ?
+                        "✓ Set" : "Not set"
+                    color: controller && controller.metadata_cover_url !== "" ?
+                        Material.color(Material.Green) : Material.foreground
                 }
             }
         }
 
-        // Conversion options
+        // Upload option
         GroupBox {
-            title: "Output Options"
+            title: "Upload Settings"
             Layout.fillWidth: true
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 12
+                spacing: 8
 
                 CheckBox {
+                    id: uploadCheckbox
                     text: "Upload to Audiobookshelf after conversion"
                     checked: controller && controller.abs_host !== "" && controller.abs_token !== ""
                     enabled: controller && controller.abs_host !== "" && controller.abs_token !== ""
                 }
 
                 Label {
-                    text: controller && controller.abs_host === "" ? 
-                          "Configure Audiobookshelf in Settings to enable upload" :
-                          "Will upload to: " + (controller ? controller.abs_host : "")
-                    font.pixelSize: 12
+                    text: {
+                        if (!controller || controller.abs_host === "") {
+                            return "⚙️ Configure server in Settings first"
+                        }
+                        return "Will upload to: " + controller.abs_host
+                    }
+                    font.pixelSize: 11
                     opacity: 0.6
-                    Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    Layout.fillWidth: true
                 }
             }
         }
 
         Item { Layout.fillHeight: true }
 
-        // Progress section
+        // Progress
         ColumnLayout {
             visible: controller && controller.is_processing
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 8
 
             Label {
                 text: "Converting..."
                 font.bold: true
-                font.pixelSize: 16
             }
 
             ProgressBar {
                 Layout.fillWidth: true
                 value: controller ? controller.progress_value : 0
-                indeterminate: controller ? controller.progress_value === 0 : false
+                indeterminate: controller && controller.progress_value === 0
             }
 
             Label {
                 text: controller ? controller.status_message : ""
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
-                font.pixelSize: 12
-                opacity: 0.8
+                font.pixelSize: 11
+                opacity: 0.7
             }
         }
 
-        // Action buttons
-        RowLayout {
+        // Action button
+        Button {
+            text: {
+                if (!controller) return "Start Conversion"
+                if (controller.is_processing) return "⏸ Converting..."
+                return "🚀 Start Conversion"
+            }
+            highlighted: !controller || !controller.is_processing
             Layout.fillWidth: true
-            spacing: 12
+            enabled: controller && 
+                    controller.current_folder !== "" && 
+                    controller.metadata_title !== "" &&
+                    !controller.is_processing
 
-            Button {
-                text: controller && controller.is_processing ? "Cancel Conversion" : "🚀 Start Conversion"
-                highlighted: !controller || !controller.is_processing
-                Layout.fillWidth: true
-                enabled: controller && controller.current_folder !== "" && controller.metadata_title !== ""
-                onClicked: {
-                    if (controller) {
-                        if (controller.is_processing) {
-                            controller.cancel_conversion()
-                        } else {
-                            controller.start_conversion()
-                        }
-                    }
+            onClicked: {
+                if (controller && !controller.is_processing) {
+                    controller.start_conversion()
                 }
             }
         }
 
         Label {
-            visible: !controller || controller.current_folder === "" || controller.metadata_title === ""
-            text: "⚠️ Please select a folder and set metadata before converting"
+            visible: !controller || 
+                    controller.current_folder === "" || 
+                    controller.metadata_title === ""
+            text: "⚠️ Select folder and set title/author before converting"
             color: Material.color(Material.Orange)
             font.pixelSize: 12
             Layout.fillWidth: true

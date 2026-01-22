@@ -19,7 +19,7 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
-        // Header bar with branding and settings
+        // Header bar
         Rectangle {
             Layout.fillWidth: true
             height: 56
@@ -30,7 +30,6 @@ ApplicationWindow {
                 anchors.margins: 16
                 spacing: 16
 
-                // Logo/Brand
                 RowLayout {
                     spacing: 12
 
@@ -57,7 +56,6 @@ ApplicationWindow {
 
                 Item { Layout.fillWidth: true }
 
-                // Current folder indicator
                 Label {
                     text: controller ? controller.current_folder : "No folder selected"
                     opacity: 0.7
@@ -65,7 +63,6 @@ ApplicationWindow {
                     Layout.maximumWidth: 300
                 }
 
-                // Settings button
                 ToolButton {
                     text: "⚙"
                     font.pixelSize: 16
@@ -78,7 +75,7 @@ ApplicationWindow {
             }
         }
 
-        // Tab bar with modern styling
+        // Tab bar
         TabBar {
             id: tabBar
             Layout.fillWidth: true
@@ -87,62 +84,31 @@ ApplicationWindow {
             TabButton {
                 text: "📁 Metadata"
                 font.pixelSize: 14
-                width: implicitWidth
             }
             TabButton {
                 text: "🖼️ Cover"
                 font.pixelSize: 14
-                width: implicitWidth
             }
             TabButton {
                 text: "📑 Chapters"
                 font.pixelSize: 14
-                width: implicitWidth
             }
             TabButton {
                 text: "🔄 Convert"
                 font.pixelSize: 14
-                width: implicitWidth
             }
         }
 
-        // Tab content area
+        // Tab content
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: tabBar.currentIndex
 
-            // Metadata tab
-            Item {
-                MetadataTab {
-                    anchors.fill: parent
-                    controller: window.controller
-                }
-            }
-
-            // Cover tab
-            Item {
-                CoverTab {
-                    anchors.fill: parent
-                    controller: window.controller
-                }
-            }
-
-            // Chapters tab
-            Item {
-                ChaptersTab {
-                    anchors.fill: parent
-                    controller: window.controller
-                }
-            }
-
-            // Convert tab
-            Item {
-                ConvertTab {
-                    anchors.fill: parent
-                    controller: window.controller
-                }
-            }
+            MetadataTab { }
+            CoverTab { }
+            ChaptersTab { }
+            ConvertTab { }
         }
 
         // Status bar
@@ -158,11 +124,14 @@ ApplicationWindow {
                 anchors.margins: 8
                 spacing: 12
 
-                // Status icon
                 Label {
-                    text: controller && controller.is_processing ? "⏳" :
-                          controller && controller.status_message.indexOf("✓") !== -1 ? "✓" :
-                          controller && controller.status_message.indexOf("❌") !== -1 ? "❌" : "ℹ️"
+                    text: {
+                        if (!controller) return "ℹ️"
+                        if (controller.is_processing) return "⏳"
+                        if (controller.status_message.indexOf("✓") >= 0) return "✓"
+                        if (controller.status_message.indexOf("❌") >= 0) return "❌"
+                        return "ℹ️"
+                    }
                     font.pixelSize: 14
                 }
 
@@ -190,7 +159,8 @@ ApplicationWindow {
         standardButtons: Dialog.Ok | Dialog.Cancel
         modal: true
         width: 500
-        anchors.centerIn: parent
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
 
         ColumnLayout {
             spacing: 16
@@ -204,7 +174,6 @@ ApplicationWindow {
 
             ColumnLayout {
                 spacing: 4
-                Layout.fillWidth: true
 
                 Label {
                     text: "Server URL"
@@ -222,7 +191,6 @@ ApplicationWindow {
 
             ColumnLayout {
                 spacing: 4
-                Layout.fillWidth: true
 
                 Label {
                     text: "API Token"
@@ -241,7 +209,6 @@ ApplicationWindow {
 
             ColumnLayout {
                 spacing: 4
-                Layout.fillWidth: true
 
                 Label {
                     text: "Library ID"
@@ -260,10 +227,7 @@ ApplicationWindow {
 
         onAccepted: {
             if (controller) {
-                controller.abs_host = hostField.text
-                controller.abs_token = tokenField.text
-                controller.abs_library_id = libraryField.text
-                controller.save_config_trigger = true
+                controller.save_config(hostField.text, tokenField.text, libraryField.text)
             }
         }
     }
@@ -275,7 +239,8 @@ ApplicationWindow {
         standardButtons: Dialog.Ok
         modal: true
         width: 400
-        anchors.centerIn: parent
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
 
         Label {
             id: errorLabel
@@ -285,7 +250,6 @@ ApplicationWindow {
         }
     }
 
-    // Connections to controller signals
     Connections {
         target: controller
 
@@ -305,5 +269,10 @@ ApplicationWindow {
         function onConversion_completed() {
             console.log("Conversion completed")
         }
+    }
+
+    Component.onCompleted: {
+        console.log("✅ Lectern QML UI loaded")
+        console.log("Window:", width, "x", height)
     }
 }
