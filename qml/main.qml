@@ -64,7 +64,95 @@ ApplicationWindow {
             }
         }
 
-        // Status & Actions
+        // Search Bar
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+
+            TextField {
+                id: searchField
+                placeholderText: "Search book title or author..."
+                Layout.fillWidth: true
+                onAccepted: {
+                    if (controller && text !== "") {
+                        controller.search_metadata(text, false);
+                    }
+                }
+            }
+
+            Button {
+                text: "🔍 Search"
+                enabled: controller && !controller.is_processing && searchField.text !== ""
+                onClicked: {
+                    if (controller) {
+                        controller.search_metadata(searchField.text, false);
+                    }
+                }
+            }
+        }
+
+        // Search Result Display
+        RowLayout {
+            Layout.fillWidth: true
+            visible: controller && controller.search_title !== ""
+            spacing: 15
+
+            Image {
+                source: controller ? controller.search_cover_url : ""
+                fillMode: Image.PreserveAspectFit
+                Layout.preferredWidth: 100
+                Layout.preferredHeight: 150
+
+                // Placeholder while loading
+                Rectangle {
+                    anchors.fill: parent
+                    color: "#eee"
+                    visible: parent.status !== Image.Ready
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Loading..."
+                        color: "#666"
+                    }
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label {
+                    text: controller ? controller.search_title : ""
+                    font.bold: true
+                    font.pixelSize: 18
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: "Author: " + (controller ? controller.search_author : "")
+                    font.italic: true
+                    font.pixelSize: 14
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                Button {
+                    text: "Use This Book"
+                    Layout.alignment: Qt.AlignLeft
+                    onClicked: {
+                        if (controller) {
+                            // Copy search results to metadata fields
+                            controller.metadata_title = controller.search_title;
+                            controller.metadata_author = controller.search_author;
+                            controller.metadata_cover_url = controller.search_cover_url;
+                            controller.metadata_changed();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Folder and Conversion Section
         Label {
             text: "Path: " + (controller ? controller.current_folder : "No folder selected")
             Layout.fillWidth: true
@@ -72,27 +160,13 @@ ApplicationWindow {
             font.pixelSize: 12
         }
 
-        RowLayout {
+        Button {
+            text: controller && controller.is_processing ? "⏸️ Converting..." : "🚀 Start Conversion"
+            enabled: controller && controller.current_folder !== "" && !controller.is_processing
             Layout.alignment: Qt.AlignHCenter
-            spacing: 10
-
-            Button {
-                text: "🔍 Search Metadata"
-                enabled: controller && controller.current_folder !== "" && !controller.is_processing
-                onClicked: {
-                    if (controller) {
-                        controller.search_metadata("test query", false);
-                    }
-                }
-            }
-
-            Button {
-                text: controller && controller.is_processing ? "⏸️ Converting..." : "🚀 Start Conversion"
-                enabled: controller && controller.current_folder !== "" && !controller.is_processing
-                onClicked: {
-                    if (controller) {
-                        controller.start_conversion();
-                    }
+            onClicked: {
+                if (controller) {
+                    controller.start_conversion();
                 }
             }
         }

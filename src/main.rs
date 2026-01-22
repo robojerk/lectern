@@ -28,6 +28,12 @@ pub struct LecternController {
     metadata_narrator: qt_property!(QString; NOTIFY metadata_changed),
     metadata_cover_url: qt_property!(QString; NOTIFY metadata_changed),
 
+    // Search result properties
+    search_title: qt_property!(QString; NOTIFY search_result_changed),
+    search_author: qt_property!(QString; NOTIFY search_result_changed),
+    search_cover_url: qt_property!(QString; NOTIFY search_result_changed),
+    search_result_changed: qt_signal!(),
+
     // ABS settings
     abs_host: qt_property!(QString; NOTIFY config_changed),
     abs_token: qt_property!(QString; NOTIFY config_changed),
@@ -136,51 +142,47 @@ impl LecternController {
     }
 
     fn search_metadata(&mut self, query: QString, _by_asin: bool) {
+        let qptr = QPointer::from(&*self);
         let query_str = query.to_string();
 
-        // Set loading state immediately on main thread
+        // Show loading state in UI
         self.is_processing = true;
         self.status_message = QString::from(format!("Searching for '{}'...", query_str));
-        self.progress_value = 0.1;
-        self.processing_changed();
         self.status_changed();
-        self.progress_changed();
+        self.processing_changed();
 
-        // Create thread-safe callback to update UI from background thread
-        let qptr = QPointer::from(&*self);
-        let update_ui = queued_callback(move |result: Result<BookMetadata, String>| {
+        // Define the callback to update UI with results
+        let on_complete = queued_callback(move |results: Vec<BookMetadata>| {
             if let Some(pinned) = qptr.as_pinned() {
-                let mut controller = pinned.borrow_mut();
-                match result {
-                    Ok(metadata) => {
-                        controller.progress_value = 1.0;
-                        controller.metadata_title = QString::from(metadata.title);
-                        controller.metadata_author = QString::from(metadata.authors.join(", "));
-                        controller.metadata_series = QString::from(metadata.series_name.unwrap_or_default());
-                        controller.metadata_narrator = QString::from(metadata.narrator_names.map(|n| n.join(", ")).unwrap_or_default());
-                        controller.metadata_cover_url = QString::from(metadata.cover_url.unwrap_or_default());
-                        controller.status_message = QString::from("Metadata search completed");
-                        controller.metadata_changed();
-                        controller.status_changed();
-                        controller.progress_changed();
-                    }
-                    Err(error) => {
-                        controller.status_message = QString::from(format!("Search failed: {}", error));
-                        controller.error_occurred(QString::from(format!("Search failed: {}", error)));
-                        controller.status_changed();
-                    }
+                let mut s = pinned.borrow_mut();
+                s.is_processing = false;
+
+                // Grab the first result and update search result properties
+                if let Some(book) = results.first() {
+                    s.search_title = book.title.clone().into();
+                    s.search_author = book.author().into();
+                    s.search_cover_url = book.image_url.clone().into();
+                    s.status_message = QString::from("Search completed");
+                } else {
+                    s.status_message = QString::from("No results found");
                 }
-                controller.is_processing = false;
-                controller.processing_changed();
+
+                s.search_result_changed();
+                s.status_changed();
+                s.processing_changed();
             }
         });
 
-        // Start background task
+        // Spawn background search
         std::thread::spawn(move || {
-            // Perform the actual API search on background thread
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            let result = runtime.block_on(AudioService::fetch_metadata(&query_str));
-            update_ui(result);
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                // Call Audnexus logic in services.rs
+                match AudioService::fetch_metadata(&query_str).await {
+                    Ok(metadata) => on_complete(vec![metadata]),
+                    Err(_) => on_complete(vec![]),
+                }
+            });
         });
     }
 
@@ -200,12 +202,8 @@ impl LecternController {
             } else {
                 Some(self.metadata_series.to_string())
             },
-            cover_url: if self.metadata_cover_url.to_string().is_empty() {
-                None
-            } else {
-                Some(self.metadata_cover_url.to_string())
-            },
-            asin: None, // TODO: extract from search
+            image_url: self.metadata_cover_url.to_string(),
+            asin: "".to_string(), // TODO: extract from search
             duration_minutes: None,
             release_date: None,
         };
@@ -297,6 +295,9 @@ impl LecternController {
 }
 
 fn main() {
+    // Force Qt logging to help debug QML loading issues
+    std::env::set_var("QT_LOGGING_RULES", "qt.qml.connections.warning=true");
+
     // Initialize Qt environment (Crucial for GUI)
     if std::env::var("QT_QPA_PLATFORM").is_err() {
         std::env::set_var("QT_QPA_PLATFORM", "xcb");

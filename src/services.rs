@@ -6,16 +6,23 @@ use reqwest::Client;
 
 // --- Data Structures ---
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct BookMetadata {
     pub title: String,
     pub authors: Vec<String>,
     pub narrator_names: Option<Vec<String>>,
     pub series_name: Option<String>,
-    pub cover_url: Option<String>,
-    pub asin: Option<String>,
+    pub image_url: String,
+    pub asin: String,
     pub duration_minutes: Option<u64>,
     pub release_date: Option<String>,
+}
+
+// Convenience methods for QML compatibility
+impl BookMetadata {
+    pub fn author(&self) -> String {
+        self.authors.join(", ")
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -108,8 +115,8 @@ impl AudioService {
             authors: data.authors,
             narrator_names: if data.narrators.is_empty() { None } else { Some(data.narrators) },
             series_name: data.series,
-            cover_url: data.image,
-            asin: Some(data.asin),
+            image_url: data.image.unwrap_or_default(),
+            asin: data.asin,
             duration_minutes: data.runtime_length_min,
             release_date: data.release_date,
         })
