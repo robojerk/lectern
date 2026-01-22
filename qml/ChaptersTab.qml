@@ -2,9 +2,10 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Item {
-    property LecternController controller
+    property var controller
 
     ColumnLayout {
         anchors.fill: parent
@@ -20,14 +21,16 @@ Item {
 
             Button {
                 text: "🎵 Auto-Detect"
-                enabled: controller.current_folder !== ""
-                onClicked: controller.auto_detect_chapters()
+                enabled: false
+                ToolTip.text: "Coming soon: Auto-detect chapters from file names"
+                ToolTip.visible: hovered
             }
 
             Button {
                 text: "🌐 Get from Audible"
-                enabled: controller.metadata_asin !== ""
-                onClicked: controller.fetch_chapters_from_audible()
+                enabled: false
+                ToolTip.text: "Coming soon: Fetch chapter data from Audible"
+                ToolTip.visible: hovered
             }
 
             Item { Layout.fillWidth: true }
@@ -42,13 +45,15 @@ Item {
 
             Button {
                 text: "🔄 Apply Shift"
-                onClicked: controller.shift_chapters(shiftSpinBox.value / 1000.0)
+                enabled: false
+                ToolTip.text: "Coming soon: Shift all chapter times"
+                ToolTip.visible: hovered
             }
         }
 
         // Chapters list
         GroupBox {
-            title: "Chapters"
+            title: "Chapters (Coming Soon)"
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -63,7 +68,7 @@ Item {
 
                     model: ListModel {
                         id: chaptersModel
-                        // TODO: Bind to actual chapters model from Rust
+                        // Placeholder data
                         ListElement { title: "Chapter 1"; startTime: 0; locked: false }
                         ListElement { title: "Chapter 2"; startTime: 1200; locked: false }
                         ListElement { title: "Chapter 3"; startTime: 2400; locked: true }
@@ -82,16 +87,15 @@ Item {
 
                             // Lock button
                             ToolButton {
-                                icon.source: model.locked ? "qrc:/icons/lock.png" : "qrc:/icons/unlock.png"
                                 text: model.locked ? "🔒" : "🔓"
-                                onClicked: controller.lock_chapter(index, !model.locked)
+                                enabled: false
                             }
 
                             // Title field
                             TextField {
                                 text: model.title
                                 Layout.fillWidth: true
-                                onEditingFinished: controller.update_chapter(index, text, model.startTime)
+                                enabled: false
                             }
 
                             // Time field
@@ -99,24 +103,19 @@ Item {
                                 text: formatTime(model.startTime)
                                 width: 100
                                 validator: DoubleValidator { bottom: 0 }
-                                onEditingFinished: {
-                                    var seconds = parseFloat(text)
-                                    if (!isNaN(seconds)) {
-                                        controller.update_chapter(index, model.title, seconds)
-                                    }
-                                }
+                                enabled: false
                             }
 
                             // Play button
                             ToolButton {
                                 text: "▶️"
-                                onClicked: controller.play_chapter(index)
+                                enabled: false
                             }
 
                             // Remove button
                             ToolButton {
                                 text: "🗑️"
-                                onClicked: controller.remove_chapter(index)
+                                enabled: false
                             }
                         }
                     }
@@ -126,7 +125,7 @@ Item {
 
         // Playback controls (for chapter preview)
         GroupBox {
-            title: "Chapter Preview"
+            title: "Chapter Preview (Coming Soon)"
             Layout.fillWidth: true
 
             RowLayout {
@@ -134,20 +133,27 @@ Item {
 
                 Label {
                     id: playbackStatus
-                    text: "No chapter playing"
+                    text: "Chapter management coming soon"
                     Layout.fillWidth: true
                 }
 
                 Button {
                     text: "⏸️"
-                    onClicked: controller.pause_playback()
+                    enabled: false
                 }
 
                 Button {
                     text: "⏹️"
-                    onClicked: controller.stop_playback()
+                    enabled: false
                 }
             }
+        }
+
+        Label {
+            text: "Note: Chapter management features are planned for a future release"
+            opacity: 0.6
+            font.italic: true
+            Layout.fillWidth: true
         }
     }
 
@@ -157,6 +163,7 @@ Item {
         title: "Add Chapter"
         standardButtons: Dialog.Ok | Dialog.Cancel
         modal: true
+        anchors.centerIn: parent
 
         ColumnLayout {
             spacing: 10
@@ -176,9 +183,8 @@ Item {
         }
 
         onAccepted: {
-            var title = chapterTitleField.text
-            var time = parseFloat(chapterTimeField.text) || 0
-            controller.add_chapter(title, time)
+            // TODO: Implement chapter adding
+            console.log("Would add chapter:", chapterTitleField.text, "at", chapterTimeField.text)
 
             // Reset fields
             chapterTitleField.text = ""
@@ -193,10 +199,13 @@ Item {
         var ms = Math.floor((seconds % 1) * 1000)
 
         if (hours > 0) {
-            return hours + ":" + minutes.toString().padStart(2, '0') + ":" +
-                   secs.toString().padStart(2, '0') + "." + ms.toString().padStart(3, '0')
+            return hours + ":" +
+                   minutes.toString().padStart(2, '0') + ":" +
+                   secs.toString().padStart(2, '0') + "." +
+                   ms.toString().padStart(3, '0')
         } else {
-            return minutes + ":" + secs.toString().padStart(2, '0') + "." +
+            return minutes + ":" +
+                   secs.toString().padStart(2, '0') + "." +
                    ms.toString().padStart(3, '0')
         }
     }

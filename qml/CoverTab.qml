@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import QtQuick.Dialogs
 
 Item {
-    property LecternController controller
+    property var controller
 
     ColumnLayout {
         anchors.fill: parent
