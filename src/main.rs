@@ -6,7 +6,6 @@ mod services;
 use services::{AudioService, BookMetadata, ABSConfig};
 
 use qmetaobject::*;
-use qmetaobject::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use url::Url;
@@ -247,7 +246,7 @@ impl LecternController {
                 let mut controller = pinned.borrow_mut();
                 match update {
                     Ok(message) => {
-                        controller.status_message = QString::from(&message);
+                        controller.status_message = QString::from(message.as_str());
                         controller.is_processing = false;
                         controller.processing_changed();
                         controller.status_changed();
@@ -258,7 +257,7 @@ impl LecternController {
                         }
                     }
                     Err(error) => {
-                        controller.status_message = QString::from(&error);
+                        controller.status_message = QString::from(error.as_str());
                         controller.error_occurred(QString::from("Conversion failed"));
                         controller.status_changed();
                         controller.is_processing = false;
@@ -345,10 +344,10 @@ fn main() {
     // Initialize qmetaobject
     println!("Initializing Qt...");
     qmetaobject::qml_register_type::<LecternController>(
-        cstr::cstr!("Lectern"),
+        "Lectern",
         1,
         0,
-        cstr::cstr!("LecternController"),
+        "LecternController",
     );
     println!("Qt initialized successfully");
 
