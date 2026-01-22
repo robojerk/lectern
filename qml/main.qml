@@ -2,7 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
 
 ApplicationWindow {
     id: window
@@ -14,14 +13,13 @@ ApplicationWindow {
     Material.theme: Material.Dark
     Material.accent: Material.Purple
     Material.primary: Material.DeepPurple
-    Material.background: Material.color(Material.Grey, Material.Shade900)
-    Material.foreground: Material.color(Material.Grey, Material.Shade50)
 
+    // Main content area
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // Header bar
+        // Header bar with branding and settings
         Rectangle {
             Layout.fillWidth: true
             height: 56
@@ -32,7 +30,7 @@ ApplicationWindow {
                 anchors.margins: 16
                 spacing: 16
 
-                // Logo
+                // Logo/Brand
                 RowLayout {
                     spacing: 12
 
@@ -59,9 +57,9 @@ ApplicationWindow {
 
                 Item { Layout.fillWidth: true }
 
-                // Current folder
+                // Current folder indicator
                 Label {
-                    text: controller ? (controller.current_folder || "No folder selected") : "No folder selected"
+                    text: controller ? controller.current_folder : "No folder selected"
                     opacity: 0.7
                     elide: Text.ElideMiddle
                     Layout.maximumWidth: 300
@@ -72,11 +70,15 @@ ApplicationWindow {
                     text: "⚙"
                     font.pixelSize: 16
                     onClicked: settingsDialog.open()
+
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Settings"
+                    ToolTip.delay: 500
                 }
             }
         }
 
-        // Tab bar
+        // Tab bar with modern styling
         TabBar {
             id: tabBar
             Layout.fillWidth: true
@@ -85,41 +87,61 @@ ApplicationWindow {
             TabButton {
                 text: "📁 Metadata"
                 font.pixelSize: 14
+                width: implicitWidth
             }
             TabButton {
                 text: "🖼️ Cover"
                 font.pixelSize: 14
+                width: implicitWidth
             }
             TabButton {
                 text: "📑 Chapters"
                 font.pixelSize: 14
+                width: implicitWidth
             }
             TabButton {
                 text: "🔄 Convert"
                 font.pixelSize: 14
+                width: implicitWidth
             }
         }
 
-        // Tab content
+        // Tab content area
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: tabBar.currentIndex
 
-            MetadataTab {
-                controller: window.controller
+            // Metadata tab
+            Item {
+                MetadataTab {
+                    anchors.fill: parent
+                    controller: window.controller
+                }
             }
 
-            CoverTab {
-                controller: window.controller
+            // Cover tab
+            Item {
+                CoverTab {
+                    anchors.fill: parent
+                    controller: window.controller
+                }
             }
 
-            ChaptersTab {
-                controller: window.controller
+            // Chapters tab
+            Item {
+                ChaptersTab {
+                    anchors.fill: parent
+                    controller: window.controller
+                }
             }
 
-            ConvertTab {
-                controller: window.controller
+            // Convert tab
+            Item {
+                ConvertTab {
+                    anchors.fill: parent
+                    controller: window.controller
+                }
             }
         }
 
@@ -136,8 +158,11 @@ ApplicationWindow {
                 anchors.margins: 8
                 spacing: 12
 
+                // Status icon
                 Label {
-                    text: controller && controller.is_processing ? "⏳" : "ℹ️"
+                    text: controller && controller.is_processing ? "⏳" :
+                          controller && controller.status_message.indexOf("✓") !== -1 ? "✓" :
+                          controller && controller.status_message.indexOf("❌") !== -1 ? "❌" : "ℹ️"
                     font.pixelSize: 14
                 }
 
@@ -172,37 +197,73 @@ ApplicationWindow {
             width: parent.width
 
             Label {
-                text: "Configure your Audiobookshelf server:"
+                text: "Configure your Audiobookshelf server connection:"
+                font.pixelSize: 14
                 opacity: 0.8
             }
 
-            Label { text: "Server URL"; opacity: 0.7; font.pixelSize: 11 }
-            TextField {
-                id: hostField
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                text: controller ? controller.abs_host : ""
-                placeholderText: "https://abs.yourdomain.com"
+
+                Label {
+                    text: "Server URL"
+                    font.pixelSize: 11
+                    opacity: 0.7
+                }
+
+                TextField {
+                    id: hostField
+                    placeholderText: "https://abs.yourdomain.com"
+                    text: controller ? controller.abs_host : ""
+                    Layout.fillWidth: true
+                }
             }
 
-            Label { text: "API Token"; opacity: 0.7; font.pixelSize: 11 }
-            TextField {
-                id: tokenField
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                text: controller ? controller.abs_token : ""
-                echoMode: TextInput.Password
+
+                Label {
+                    text: "API Token"
+                    font.pixelSize: 11
+                    opacity: 0.7
+                }
+
+                TextField {
+                    id: tokenField
+                    placeholderText: "Your API token"
+                    text: controller ? controller.abs_token : ""
+                    echoMode: TextInput.Password
+                    Layout.fillWidth: true
+                }
             }
 
-            Label { text: "Library ID"; opacity: 0.7; font.pixelSize: 11 }
-            TextField {
-                id: libraryField
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                text: controller ? controller.abs_library_id : ""
+
+                Label {
+                    text: "Library ID"
+                    font.pixelSize: 11
+                    opacity: 0.7
+                }
+
+                TextField {
+                    id: libraryField
+                    placeholderText: "Library UUID"
+                    text: controller ? controller.abs_library_id : ""
+                    Layout.fillWidth: true
+                }
             }
         }
 
         onAccepted: {
             if (controller) {
-                controller.save_config(hostField.text, tokenField.text, libraryField.text)
+                controller.abs_host = hostField.text
+                controller.abs_token = tokenField.text
+                controller.abs_library_id = libraryField.text
+                controller.save_config_trigger = true
             }
         }
     }
@@ -218,11 +279,13 @@ ApplicationWindow {
 
         Label {
             id: errorLabel
+            text: ""
             wrapMode: Text.Wrap
             width: parent.width
         }
     }
 
+    // Connections to controller signals
     Connections {
         target: controller
 
@@ -234,9 +297,13 @@ ApplicationWindow {
         function onLog_message(message) {
             console.log("LECTERN:", message)
         }
-    }
 
-    Component.onCompleted: {
-        console.log("Lectern loaded")
+        function onMetadata_changed() {
+            console.log("Metadata changed")
+        }
+
+        function onConversion_completed() {
+            console.log("Conversion completed")
+        }
     }
 }

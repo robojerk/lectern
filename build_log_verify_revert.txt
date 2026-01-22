@@ -1,0 +1,84 @@
+   Compiling lectern v0.1.0 (/var/home/rob/Documents/Projects/lectern)
+warning: unused variable: `by_asin`
+   --> src/main.rs:263:51
+    |
+263 |     fn search_metadata(&mut self, query: QString, by_asin: bool) {
+    |                                                   ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_by_asin`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: methods `save_config`, `set_folder_path`, `scan_chapters`, `search_metadata`, `start_conversion`, and `cancel_conversion` are never used
+   --> src/main.rs:114:8
+    |
+81  | impl LecternController {
+    | ---------------------- methods in this implementation
+...
+114 |     fn save_config(&mut self, host: QString, token: QString, lib_id: QString) {
+    |        ^^^^^^^^^^^
+...
+152 |     fn set_folder_path(&mut self, url_string: QString) {
+    |        ^^^^^^^^^^^^^^^
+...
+183 |     fn scan_chapters(&mut self) {
+    |        ^^^^^^^^^^^^^
+...
+263 |     fn search_metadata(&mut self, query: QString, by_asin: bool) {
+    |        ^^^^^^^^^^^^^^^
+...
+308 |     fn start_conversion(&mut self) {
+    |        ^^^^^^^^^^^^^^^^
+...
+435 |     fn cancel_conversion(&mut self) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: struct `ABSConfig` is never constructed
+  --> src/services.rs:32:12
+   |
+32 | pub struct ABSConfig {
+   |            ^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/services.rs:79:18
+    |
+77  | impl AudioService {
+    | ----------------- associated functions in this implementation
+78  |     /// Fetch metadata from Audnexus API (free alternative to Audible API)
+79  |     pub async fn fetch_metadata(query: &str) -> Result<BookMetadata, String> {
+    |                  ^^^^^^^^^^^^^^
+...
+93  |     async fn search_audnexus(client: &Client, query: &str) -> Result<BookMetadata, String> {
+    |              ^^^^^^^^^^^^^^^
+...
+126 |     async fn search_audible(_client: &Client, _query: &str) -> Result<BookMetadata, String> {
+    |              ^^^^^^^^^^^^^^
+...
+134 |     pub async fn convert_to_m4b_with_chapters(
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+209 |     pub async fn find_mp3_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    |                  ^^^^^^^^^^^^^^
+...
+227 |     async fn create_concat_file(files: &[PathBuf], concat_path: &str) -> Result<(), String> {
+    |              ^^^^^^^^^^^^^^^^^^
+...
+246 |     pub async fn apply_tags(_file_path: &str, metadata: &BookMetadata) -> Result<(), String> {
+    |                  ^^^^^^^^^^
+...
+266 |     pub async fn upload_and_scan(file_path: &str, config: &ABSConfig) -> Result<(), String> {
+    |                  ^^^^^^^^^^^^^^^
+...
+321 |     async fn trigger_library_scan(client: &Client, config: &ABSConfig, _item_id: &str) -> Result<(), String> {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> src/playback.rs:15:12
+   |
+14 | impl AudioPlayer {
+   | ---------------- associated function in this implementation
+15 |     pub fn new() -> Option<Self> {
+   |            ^^^
+
+warning: `lectern` (bin "lectern") generated 5 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.48s

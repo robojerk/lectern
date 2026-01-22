@@ -23,7 +23,7 @@ pub struct LecternController {
     base: qt_base_class!(trait QObject),
 
     // Properties
-    current_folder: qt_property!(QString; NOTIFY folder_changed),
+    current_folder: qt_property!(QString; WRITE set_folder_path NOTIFY folder_changed),
     status_message: qt_property!(QString; NOTIFY status_changed),
     progress_value: qt_property!(f64; NOTIFY progress_changed),
     is_processing: qt_property!(bool; NOTIFY processing_changed),
@@ -40,12 +40,30 @@ pub struct LecternController {
     search_author: qt_property!(QString; NOTIFY search_result_changed),
     search_cover_url: qt_property!(QString; NOTIFY search_result_changed),
     search_result_changed: qt_signal!(),
+    
+    // Search Inputs
+    search_query_input: qt_property!(QString; WRITE set_search_query NOTIFY search_inputs_changed),
+    search_by_asin_input: qt_property!(bool; WRITE set_search_by_asin NOTIFY search_inputs_changed),
+    search_trigger: qt_property!(bool; WRITE search_metadata NOTIFY search_trigger_changed),
+    
+    search_inputs_changed: qt_signal!(),
+    search_trigger_changed: qt_signal!(),
+    
+    // Conversion Triggers
+    start_conversion_trigger: qt_property!(bool; WRITE start_conversion NOTIFY start_conversion_trigger_changed),
+    cancel_conversion_trigger: qt_property!(bool; WRITE cancel_conversion NOTIFY cancel_conversion_trigger_changed),
+    
+    start_conversion_trigger_changed: qt_signal!(),
+    cancel_conversion_trigger_changed: qt_signal!(),
 
     // ABS settings
-    abs_host: qt_property!(QString; NOTIFY config_changed),
-    abs_token: qt_property!(QString; NOTIFY config_changed),
-    abs_library_id: qt_property!(QString; NOTIFY config_changed),
+    abs_host: qt_property!(QString; WRITE set_abs_host NOTIFY config_changed),
+    abs_token: qt_property!(QString; WRITE set_abs_token NOTIFY config_changed),
+    abs_library_id: qt_property!(QString; WRITE set_abs_library_id NOTIFY config_changed),
     config_changed: qt_signal!(),
+    
+    save_config_trigger: qt_property!(bool; WRITE save_config NOTIFY save_config_trigger_changed),
+    save_config_trigger_changed: qt_signal!(),
 
 
     // Signals
@@ -58,6 +76,8 @@ pub struct LecternController {
     conversion_completed: qt_signal!(),
     error_occurred: qt_signal!(message: QString),
 
+    // Methods invokable from QML
+    
     // Chapter Management
     chapters_json: qt_property!(QString; NOTIFY chapters_changed),
     chapters_changed: qt_signal!(),
@@ -70,6 +90,10 @@ pub struct LecternController {
 
     playback_stop_trigger: qt_property!(bool; WRITE stop_playback_trigger NOTIFY playback_stop_trigger_changed),
     playback_stop_trigger_changed: qt_signal!(),
+
+    // Operation Triggers
+    scan_chapters_trigger: qt_property!(bool; WRITE scan_chapters NOTIFY scan_chapters_trigger_changed),
+    scan_chapters_trigger_changed: qt_signal!(),
 
     // Internal state (not properties)
     audio_player: AudioPlayer,
@@ -109,10 +133,18 @@ impl LecternController {
         self.status_changed();
     }
 
-    fn save_config(&mut self, url: QString, token: QString, id: QString) {
-        self.abs_host = url;
-        self.abs_token = token;
-        self.abs_library_id = id;
+    // Setters for ABS config properties
+    fn set_abs_host(&mut self, val: QString) { self.abs_host = val; self.config_changed(); }
+    fn set_abs_token(&mut self, val: QString) { self.abs_token = val; self.config_changed(); }
+    fn set_abs_library_id(&mut self, val: QString) { self.abs_library_id = val; self.config_changed(); }
+
+    fn save_config(&mut self, _val: bool) {
+        // Reset trigger
+        self.save_config_trigger = false;
+        self.save_config_trigger_changed();
+
+        // Use current property values
+        // self.abs_host etc are already set by QML bindings/setters
 
         // Trigger the signal so the UI stays in sync
         self.config_changed();
@@ -175,10 +207,14 @@ impl LecternController {
         println!("📂 Folder set to: {:?}", path);
 
         // Trigger chapter scan
-        self.scan_chapters();
+        self.scan_chapters(true);
     }
 
-    fn scan_chapters(&mut self) {
+    fn scan_chapters(&mut self, _val: bool) {
+        // Reset trigger
+        self.scan_chapters_trigger = false;
+        self.scan_chapters_trigger_changed();
+
         let folder = self.current_folder.to_string();
         let qptr = QPointer::from(&*self);
         
@@ -258,9 +294,18 @@ impl LecternController {
         self.audio_player.stop();
     }
 
-    fn search_metadata(&mut self, query: QString, _by_asin: bool) {
+    // Search input setters
+    fn set_search_query(&mut self, val: QString) { self.search_query_input = val; self.search_inputs_changed(); }
+    fn set_search_by_asin(&mut self, val: bool) { self.search_by_asin_input = val; self.search_inputs_changed(); }
+
+    fn search_metadata(&mut self, _val: bool) {
+        // Reset trigger
+        self.search_trigger = false;
+        self.search_trigger_changed();
+
         let qptr = QPointer::from(&*self);
-        let query_str = query.to_string();
+        let query_str = self.search_query_input.to_string();
+        let by_asin = self.search_by_asin_input;
 
         // Show loading state in UI
         self.is_processing = true;
@@ -498,7 +543,7 @@ fn main() {
 
     // Load the UI
     eprintln!("Loading main.qml...");
-    engine.load_file("main.qml".into());
+    engine.load_file("qml/main.qml".into());
     eprintln!("main.qml loaded");
 
     println!("✅ Lectern window should now be visible!");
