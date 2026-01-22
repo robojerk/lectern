@@ -17,12 +17,11 @@ ApplicationWindow {
     Material.background: Material.color(Material.Grey, Material.Shade900)
     Material.foreground: Material.color(Material.Grey, Material.Shade50)
 
-    // Main content area
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // Header bar with branding and settings
+        // Header bar
         Rectangle {
             Layout.fillWidth: true
             height: 56
@@ -33,7 +32,7 @@ ApplicationWindow {
                 anchors.margins: 16
                 spacing: 16
 
-                // Logo/Brand
+                // Logo
                 RowLayout {
                     spacing: 12
 
@@ -60,7 +59,7 @@ ApplicationWindow {
 
                 Item { Layout.fillWidth: true }
 
-                // Current folder indicator
+                // Current folder
                 Label {
                     text: controller ? (controller.current_folder || "No folder selected") : "No folder selected"
                     opacity: 0.7
@@ -73,16 +72,11 @@ ApplicationWindow {
                     text: "⚙"
                     font.pixelSize: 16
                     onClicked: settingsDialog.open()
-
-                    ToolTip {
-                        text: "Settings"
-                        delay: 500
-                    }
                 }
             }
         }
 
-        // Tab bar with modern styling
+        // Tab bar
         TabBar {
             id: tabBar
             Layout.fillWidth: true
@@ -91,47 +85,39 @@ ApplicationWindow {
             TabButton {
                 text: "📁 Metadata"
                 font.pixelSize: 14
-                width: implicitWidth
             }
             TabButton {
                 text: "🖼️ Cover"
                 font.pixelSize: 14
-                width: implicitWidth
             }
             TabButton {
                 text: "📑 Chapters"
                 font.pixelSize: 14
-                width: implicitWidth
             }
             TabButton {
                 text: "🔄 Convert"
                 font.pixelSize: 14
-                width: implicitWidth
             }
         }
 
-        // Tab content area
+        // Tab content
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: tabBar.currentIndex
 
-            // Metadata tab
             MetadataTab {
                 controller: window.controller
             }
 
-            // Cover tab
             CoverTab {
                 controller: window.controller
             }
 
-            // Chapters tab
             ChaptersTab {
                 controller: window.controller
             }
 
-            // Convert tab
             ConvertTab {
                 controller: window.controller
             }
@@ -150,11 +136,8 @@ ApplicationWindow {
                 anchors.margins: 8
                 spacing: 12
 
-                // Status icon
                 Label {
-                    text: controller && controller.is_processing ? "⏳" :
-                          controller && controller.status_message.includes("✓") ? "✓" :
-                          controller && controller.status_message.includes("❌") ? "❌" : "ℹ️"
+                    text: controller && controller.is_processing ? "⏳" : "ℹ️"
                     font.pixelSize: 14
                 }
 
@@ -189,46 +172,31 @@ ApplicationWindow {
             width: parent.width
 
             Label {
-                text: "Configure your Audiobookshelf server connection:"
-                font.pixelSize: 14
+                text: "Configure your Audiobookshelf server:"
                 opacity: 0.8
             }
 
-            Label {
-                text: "Server URL"
-                font.pixelSize: 11
-                opacity: 0.7
-            }
+            Label { text: "Server URL"; opacity: 0.7; font.pixelSize: 11 }
             TextField {
                 id: hostField
-                placeholderText: "https://abs.yourdomain.com"
-                text: controller ? controller.abs_host : ""
                 Layout.fillWidth: true
+                text: controller ? controller.abs_host : ""
+                placeholderText: "https://abs.yourdomain.com"
             }
 
-            Label {
-                text: "API Token"
-                font.pixelSize: 11
-                opacity: 0.7
-            }
+            Label { text: "API Token"; opacity: 0.7; font.pixelSize: 11 }
             TextField {
                 id: tokenField
-                placeholderText: "Your API token"
+                Layout.fillWidth: true
                 text: controller ? controller.abs_token : ""
                 echoMode: TextInput.Password
-                Layout.fillWidth: true
             }
 
-            Label {
-                text: "Library ID"
-                font.pixelSize: 11
-                opacity: 0.7
-            }
+            Label { text: "Library ID"; opacity: 0.7; font.pixelSize: 11 }
             TextField {
                 id: libraryField
-                placeholderText: "Library UUID"
-                text: controller ? controller.abs_library_id : ""
                 Layout.fillWidth: true
+                text: controller ? controller.abs_library_id : ""
             }
         }
 
@@ -250,13 +218,11 @@ ApplicationWindow {
 
         Label {
             id: errorLabel
-            text: ""
             wrapMode: Text.Wrap
             width: parent.width
         }
     }
 
-    // Connections to controller signals
     Connections {
         target: controller
 
@@ -268,19 +234,9 @@ ApplicationWindow {
         function onLog_message(message) {
             console.log("LECTERN:", message)
         }
-
-        function onMetadata_changed() {
-            console.log("Metadata changed")
-        }
-
-        function onConversion_completed() {
-            console.log("Conversion completed")
-        }
     }
 
     Component.onCompleted: {
-        console.log("Lectern QML UI loaded successfully!")
-        show()
-        raise()
+        console.log("Lectern loaded")
     }
 }

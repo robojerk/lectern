@@ -1,8 +1,7 @@
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Controls.Material
-import QtQuick.Layouts
-import QtQuick.Dialogs
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Controls.Material 2.15
+import QtQuick.Layouts 1.15
 
 Item {
     property var controller
@@ -12,48 +11,83 @@ Item {
         anchors.margins: 20
         spacing: 20
 
-        // Chapter controls
-        RowLayout {
-            Button {
-                text: "➕ Add Chapter"
-                onClicked: addChapterDialog.open()
-            }
+        GroupBox {
+            title: "Chapter Management"
+            Layout.fillWidth: true
 
-            Button {
-                text: "🎵 Auto-Detect"
-                enabled: false
-                ToolTip.text: "Coming soon: Auto-detect chapters from file names"
-                ToolTip.visible: hovered
-            }
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 12
 
-            Button {
-                text: "🌐 Get from Audible"
-                enabled: false
-                ToolTip.text: "Coming soon: Fetch chapter data from Audible"
-                ToolTip.visible: hovered
-            }
+                Label {
+                    text: "🎵 Chapters will be automatically generated during conversion"
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
 
-            Item { Layout.fillWidth: true }
-
-            Label { text: "Global Shift (seconds):" }
-            SpinBox {
-                id: shiftSpinBox
-                from: -3600
-                to: 3600
-                value: 0
-            }
-
-            Button {
-                text: "🔄 Apply Shift"
-                enabled: false
-                ToolTip.text: "Coming soon: Shift all chapter times"
-                ToolTip.visible: hovered
+                Label {
+                    text: "📁 Current audiobook: " + (controller && controller.current_folder ?
+                          controller.current_folder.split('/').pop() : "No folder selected")
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                    opacity: 0.8
+                }
             }
         }
 
-        // Chapters list
         GroupBox {
-            title: "Chapters (Coming Soon)"
+            title: "Chapter Controls"
+            Layout.fillWidth: true
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 12
+
+                Button {
+                    text: "➕ Add Chapter"
+                    enabled: false
+                    ToolTip.text: "Manual chapter editing coming soon"
+                    ToolTip.visible: hovered
+                }
+
+                Button {
+                    text: "🎵 Auto-Detect"
+                    enabled: false
+                    ToolTip.text: "Automatic chapter detection from file names coming soon"
+                    ToolTip.visible: hovered
+                }
+
+                Button {
+                    text: "🌐 Get from Audible"
+                    enabled: false
+                    ToolTip.text: "Fetch chapter data from Audible.com coming soon"
+                    ToolTip.visible: hovered
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Label { text: "Global Shift (seconds):" }
+                SpinBox {
+                    id: shiftSpinBox
+                    from: -3600
+                    to: 3600
+                    value: 0
+                    enabled: false
+                    ToolTip.text: "Time shifting coming soon"
+                    ToolTip.visible: hovered
+                }
+
+                Button {
+                    text: "🔄 Apply Shift"
+                    enabled: false
+                    ToolTip.text: "Time shifting coming soon"
+                    ToolTip.visible: hovered
+                }
+            }
+        }
+
+        GroupBox {
+            title: "Preview"
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -61,152 +95,61 @@ Item {
                 anchors.fill: parent
                 clip: true
 
-                ListView {
-                    id: chaptersList
+                ColumnLayout {
                     anchors.fill: parent
-                    spacing: 2
+                    spacing: 8
 
-                    model: ListModel {
-                        id: chaptersModel
-                        // Placeholder data
-                        ListElement { title: "Chapter 1"; startTime: 0; locked: false }
-                        ListElement { title: "Chapter 2"; startTime: 1200; locked: false }
-                        ListElement { title: "Chapter 3"; startTime: 2400; locked: true }
+                    Label {
+                        text: "📖 Chapter Preview"
+                        font.bold: true
+                        font.pixelSize: 16
                     }
 
-                    delegate: Rectangle {
-                        width: chaptersList.width
-                        height: 50
-                        color: index % 2 === 0 ? Material.color(Material.Grey, Material.Shade900)
-                                               : Material.color(Material.Grey, Material.Shade800)
+                    Label {
+                        text: "Chapters will be automatically created based on:"
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                        opacity: 0.8
+                    }
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 5
-                            spacing: 10
+                    Label {
+                        text: "• Audio file boundaries (if multiple files)"
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                        opacity: 0.7
+                    }
 
-                            // Lock button
-                            ToolButton {
-                                text: model.locked ? "🔒" : "🔓"
-                                enabled: false
-                            }
+                    Label {
+                        text: "• Silence detection in audio stream"
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                        opacity: 0.7
+                    }
 
-                            // Title field
-                            TextField {
-                                text: model.title
-                                Layout.fillWidth: true
-                                enabled: false
-                            }
+                    Label {
+                        text: "• Manual chapter markers (future feature)"
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                        opacity: 0.7
+                    }
 
-                            // Time field
-                            TextField {
-                                text: formatTime(model.startTime)
-                                width: 100
-                                validator: DoubleValidator { bottom: 0 }
-                                enabled: false
-                            }
+                    Item { Layout.fillHeight: true }
 
-                            // Play button
-                            ToolButton {
-                                text: "▶️"
-                                enabled: false
-                            }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Material.color(Material.Grey, Material.Shade600)
+                    }
 
-                            // Remove button
-                            ToolButton {
-                                text: "🗑️"
-                                enabled: false
-                            }
-                        }
+                    Label {
+                        text: "🚀 Ready for conversion! Chapters will be generated automatically."
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                        color: Material.accent
+                        font.bold: true
                     }
                 }
             }
-        }
-
-        // Playback controls (for chapter preview)
-        GroupBox {
-            title: "Chapter Preview (Coming Soon)"
-            Layout.fillWidth: true
-
-            RowLayout {
-                anchors.fill: parent
-
-                Label {
-                    id: playbackStatus
-                    text: "Chapter management coming soon"
-                    Layout.fillWidth: true
-                }
-
-                Button {
-                    text: "⏸️"
-                    enabled: false
-                }
-
-                Button {
-                    text: "⏹️"
-                    enabled: false
-                }
-            }
-        }
-
-        Label {
-            text: "Note: Chapter management features are planned for a future release"
-            opacity: 0.6
-            font.italic: true
-            Layout.fillWidth: true
-        }
-    }
-
-    // Add chapter dialog
-    Dialog {
-        id: addChapterDialog
-        title: "Add Chapter"
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        modal: true
-        anchors.centerIn: parent
-
-        ColumnLayout {
-            spacing: 10
-
-            TextField {
-                id: chapterTitleField
-                placeholderText: "Chapter title"
-                Layout.fillWidth: true
-            }
-
-            TextField {
-                id: chapterTimeField
-                placeholderText: "Start time (seconds)"
-                validator: DoubleValidator { bottom: 0 }
-                Layout.fillWidth: true
-            }
-        }
-
-        onAccepted: {
-            // TODO: Implement chapter adding
-            console.log("Would add chapter:", chapterTitleField.text, "at", chapterTimeField.text)
-
-            // Reset fields
-            chapterTitleField.text = ""
-            chapterTimeField.text = ""
-        }
-    }
-
-    function formatTime(seconds) {
-        var hours = Math.floor(seconds / 3600)
-        var minutes = Math.floor((seconds % 3600) / 60)
-        var secs = Math.floor(seconds % 60)
-        var ms = Math.floor((seconds % 1) * 1000)
-
-        if (hours > 0) {
-            return hours + ":" +
-                   minutes.toString().padStart(2, '0') + ":" +
-                   secs.toString().padStart(2, '0') + "." +
-                   ms.toString().padStart(3, '0')
-        } else {
-            return minutes + ":" +
-                   secs.toString().padStart(2, '0') + "." +
-                   ms.toString().padStart(3, '0')
         }
     }
 }

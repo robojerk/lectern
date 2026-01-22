@@ -1,8 +1,8 @@
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Controls.Material
-import QtQuick.Layouts
-import QtQuick.Dialogs
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Controls.Material 2.15
+import QtQuick.Layouts 1.15
+import QtQuick.Dialogs 1.3
 
 Item {
     property var controller
@@ -302,7 +302,7 @@ Item {
                                     controller.metadata_title = controller.search_title
                                     controller.metadata_author = controller.search_author
                                     controller.metadata_cover_url = controller.search_cover_url
-                                    
+
                                     // Update the text fields
                                     titleField.text = controller.metadata_title
                                     authorField.text = controller.metadata_author
