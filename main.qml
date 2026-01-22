@@ -21,29 +21,43 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
-        // Header bar with prominent drag instruction
+        // Header bar
         Rectangle {
             Layout.fillWidth: true
-            height: 80
+            height: 60
             color: Material.color(Material.Grey, Material.Shade800)
 
-            ColumnLayout {
+            RowLayout {
                 anchors.fill: parent
                 anchors.margins: 16
-                spacing: 4
+                spacing: 16
 
                 Label {
-                    text: "🎵 Welcome to Lectern"
+                    text: "🎵 Lectern"
                     font.bold: true
-                    font.pixelSize: 18
+                    font.pixelSize: 20
                     color: Material.primaryColor
                 }
 
                 Label {
-                    text: "Drag and drop an audiobook folder below, or use the browse button to get started"
-                    opacity: 0.8
-                    font.pixelSize: 12
+                    text: "Audiobook Tool"
+                    opacity: 0.7
+                    font.pixelSize: 14
                     color: Material.foreground
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Label {
+                    text: controller ? (controller.current_folder || "No folder selected") : "No folder selected"
+                    opacity: 0.7
+                    elide: Text.ElideMiddle
+                    Layout.maximumWidth: 300
+                }
+
+                ToolButton {
+                    text: "⚙"
+                    onClicked: settingsDialog.open()
                 }
             }
         }
@@ -52,24 +66,19 @@ ApplicationWindow {
         TabBar {
             id: tabBar
             Layout.fillWidth: true
-            background: Rectangle { color: Material.color(Material.Grey, Material.Shade800) }
-            currentIndex: 0  // Force start on Metadata tab
+            currentIndex: 0
 
             TabButton {
                 text: "📁 Metadata"
-                font.pixelSize: 14
             }
             TabButton {
                 text: "🖼️ Cover"
-                font.pixelSize: 14
             }
             TabButton {
                 text: "📑 Chapters"
-                font.pixelSize: 14
             }
             TabButton {
                 text: "🔄 Convert"
-                font.pixelSize: 14
             }
         }
 
@@ -99,43 +108,18 @@ ApplicationWindow {
         // Status bar
         Rectangle {
             Layout.fillWidth: true
-            height: 32
+            height: 30
             color: Material.color(Material.Grey, Material.Shade800)
-            border.color: Material.color(Material.Grey, Material.Shade700)
-            border.width: 1
 
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: 8
-                spacing: 12
 
                 Label {
-                    text: controller && controller.is_processing ? "⏳" : "ℹ️"
-                    font.pixelSize: 14
-                }
-
-                Label {
-                    text: controller ? controller.status_message : "Ready - Drag an audiobook folder to begin"
+                    text: controller ? controller.status_message : "Ready"
                     Layout.fillWidth: true
                     elide: Text.ElideRight
-                    font.pixelSize: 12
                 }
-            }
-        }
-    }
-
-    // Menu bar
-    menuBar: MenuBar {
-        Menu {
-            title: "&File"
-            MenuItem {
-                text: "&Settings..."
-                onTriggered: settingsDialog.open()
-            }
-            MenuSeparator {}
-            MenuItem {
-                text: "&Quit"
-                onTriggered: Qt.quit()
             }
         }
     }
@@ -145,20 +129,14 @@ ApplicationWindow {
         id: settingsDialog
         title: "Audiobookshelf Settings"
         standardButtons: Dialog.Ok | Dialog.Cancel
-        modal: true
         width: 500
-        anchors.centerIn: parent
+        modal: true
 
         ColumnLayout {
-            anchors.fill: parent
+            width: parent.width
             spacing: 16
 
-            Label {
-                text: "Configure your Audiobookshelf server:"
-                opacity: 0.8
-            }
-
-            Label { text: "Server URL"; opacity: 0.7; font.pixelSize: 11 }
+            Label { text: "Server URL:" }
             TextField {
                 id: hostField
                 Layout.fillWidth: true
@@ -166,7 +144,7 @@ ApplicationWindow {
                 placeholderText: "https://abs.yourdomain.com"
             }
 
-            Label { text: "API Token"; opacity: 0.7; font.pixelSize: 11 }
+            Label { text: "API Token:" }
             TextField {
                 id: tokenField
                 Layout.fillWidth: true
@@ -174,7 +152,7 @@ ApplicationWindow {
                 echoMode: TextInput.Password
             }
 
-            Label { text: "Library ID"; opacity: 0.7; font.pixelSize: 11 }
+            Label { text: "Library ID:" }
             TextField {
                 id: libraryField
                 Layout.fillWidth: true
@@ -189,32 +167,15 @@ ApplicationWindow {
         }
     }
 
-    // Error dialog
-    Dialog {
-        id: errorDialog
-        title: "Error"
-        standardButtons: Dialog.Ok
-        width: 400
-        anchors.centerIn: parent
-        modal: true
-
-        Label {
-            id: errorLabel
-            wrapMode: Text.Wrap
-            width: parent.width
-        }
-    }
-
     Connections {
         target: controller
 
         function onError_occurred(message) {
-            errorLabel.text = message
-            errorDialog.open()
+            console.log("Error:", message)
         }
 
         function onLog_message(message) {
-            console.log("LECTERN:", message)
+            console.log("Log:", message)
         }
     }
 }

@@ -27,6 +27,7 @@ urlencoding = "2.1"
 url = "2.5"
 dirs = "5.0"
 
+
 [dev-dependencies]
 # For easier debugging of API responses
 pretty_assertions = "1.4.0"

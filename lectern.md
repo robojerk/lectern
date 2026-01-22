@@ -134,26 +134,14 @@ Example of LOTR "The Fellowship of the Ring" & "The Hobbit"
 If set, once m4b conversion is completed the book is uploaded to AudioBookshelf server
 
 
-## Plan
-
-[01 - Architecture](./plan/01-architecture.md)
-[02 - UI](./plan/02-ui.md)
-[03 - Metadata](./plan/03-chapter-logic.md)
-[04 - Conversion](./plan/04-conversion.md)
-[04 - play Chapters](./plan/04-play-chapters.md)
-[05 - ffprobe-files](./plan/05-ffprobe-files.md)
-[06 - ABS-logic](./plan/06-abs-logic.md)
-[07 - covers](./plan/07-covers.md)
-[08 - baking](./plan/08-baking.md)
-
 ## Look
 
 I want to add tabs so the window is not so congested
 
-Meta Data (Manually edit)
-Cover (Manually upload or choose cover from providor)
+Details (Metadata)
+Cover (Manually upload or choose cover using search providor)
 Chapters (Manually edit or match to providor)
-Match (search providor to get metadata and cover art)
+Match (search providor to get metadata)
 Convert (click to start conversion)
 
 ## Progress

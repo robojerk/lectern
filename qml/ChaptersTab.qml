@@ -87,68 +87,79 @@ Item {
         }
 
         GroupBox {
-            title: "Preview"
+            title: "Chapter List"
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            ScrollView {
+            ListView {
+                id: chapterList
                 anchors.fill: parent
                 clip: true
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 8
-
-                    Label {
-                        text: "📖 Chapter Preview"
-                        font.bold: true
-                        font.pixelSize: 16
+                spacing: 4
+                
+                // Parse JSON string to object model
+                model: controller && controller.chapters_json ? JSON.parse(controller.chapters_json) : []
+                
+                delegate: Pane {
+                    width: chapterList.width
+                    padding: 8
+                    
+                    Material.elevation: 2
+                    
+                    background: Rectangle {
+                        color: Material.color(Material.Grey, Material.Shade800)
+                        radius: 4
                     }
 
-                    Label {
-                        text: "Chapters will be automatically created based on:"
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                        opacity: 0.8
-                    }
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 12
+                        
+                        Label { 
+                            text: (modelData.index + 1)
+                            font.bold: true
+                            color: Material.accent
+                            Layout.preferredWidth: 30
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            
+                            Label { 
+                                text: modelData.title 
+                                Layout.fillWidth: true
+                                elide: Text.ElideMiddle
+                                font.pixelSize: 14
+                            }
+                            
+                            Label {
+                                text: modelData.path
+                                Layout.fillWidth: true
+                                elide: Text.ElideMiddle
+                                font.pixelSize: 10
+                                opacity: 0.6
+                            }
+                        }
+                        
+                        ToolButton {
+                            text: "▶️" 
+                            ToolTip.text: "Play Preview"
+                            ToolTip.visible: hovered
+                            onClicked: controller.playing_chapter_index = modelData.index
+                        }
 
-                    Label {
-                        text: "• Audio file boundaries (if multiple files)"
-                        font.pixelSize: 12
-                        Layout.fillWidth: true
-                        opacity: 0.7
-                    }
-
-                    Label {
-                        text: "• Silence detection in audio stream"
-                        font.pixelSize: 12
-                        Layout.fillWidth: true
-                        opacity: 0.7
-                    }
-
-                    Label {
-                        text: "• Manual chapter markers (future feature)"
-                        font.pixelSize: 12
-                        Layout.fillWidth: true
-                        opacity: 0.7
-                    }
-
-                    Item { Layout.fillHeight: true }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 1
-                        color: Material.color(Material.Grey, Material.Shade600)
-                    }
-
-                    Label {
-                        text: "🚀 Ready for conversion! Chapters will be generated automatically."
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                        color: Material.accent
-                        font.bold: true
+                        ToolButton {
+                            text: "⏹️"
+                            ToolTip.text: "Stop"
+                            ToolTip.visible: hovered
+                            onClicked: controller.playback_stop_trigger = true
+                        }
                     }
                 }
+                
+                ScrollBar.vertical: ScrollBar {}
             }
         }
     }
