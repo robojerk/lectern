@@ -6,42 +6,6 @@ use qmetaobject::*;
 use qmetaobject::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
-use tokio::sync::mpsc;
-use std::sync::Arc;
-
-// --- Thread Communication Types ---
-
-/// Messages sent from background tasks to the main UI thread
-#[derive(Debug, Clone)]
-pub enum UiMessage {
-    StatusUpdate(String),
-    ProgressUpdate(f64),
-    ProcessingState(bool),
-    MetadataLoaded {
-        title: String,
-        author: String,
-        series: String,
-        narrator: String,
-        cover_url: String,
-    },
-    LogMessage(String),
-    ConversionComplete,
-    Error(String),
-}
-
-/// Updates sent during conversion process
-#[derive(Debug, Clone)]
-pub enum ConversionUpdate {
-    Progress(f64, String),
-    Log(String),
-    Complete(bool, String),
-}
-
-/// Background task handle for managing async operations
-pub struct BackgroundTask {
-    sender: mpsc::UnboundedSender<UiMessage>,
-    _handle: tokio::task::JoinHandle<()>,
-}
 
 #[derive(QObject, Default)]
 pub struct LecternController {
@@ -65,9 +29,6 @@ pub struct LecternController {
     abs_token: qt_property!(QString),
     abs_library_id: qt_property!(QString),
 
-    // Thread communication
-    ui_sender: Option<mpsc::UnboundedSender<UiMessage>>,
-    ui_receiver: Option<mpsc::UnboundedReceiver<UiMessage>>,
 
     // Signals
     folder_changed: qt_signal!(),
@@ -81,11 +42,8 @@ pub struct LecternController {
 }
 
 impl LecternController {
-    /// Initialize the controller with communication channels
-    fn initialize(&mut self, ui_sender: mpsc::UnboundedSender<UiMessage>, ui_receiver: mpsc::UnboundedReceiver<UiMessage>) {
-        self.ui_sender = Some(ui_sender);
-        self.ui_receiver = Some(ui_receiver);
-
+    /// Initialize the controller
+    fn initialize(&mut self) {
         // Load config
         self.load_config();
     }
@@ -134,22 +92,12 @@ impl LecternController {
         }
     }
 
-    /// Send a message to the UI update handler
-    fn send_ui_message(&self, message: UiMessage) {
-        if let Some(sender) = &self.ui_sender {
-            let _ = sender.send(message);
-        }
-    }
-
-    /// Public method to process pending UI messages (call this regularly)
-    pub fn update_ui(&mut self) {
-        self.process_ui_messages();
-    }
 
     fn set_folder_path(&mut self, path: QString) {
         self.current_folder = path.clone();
         self.folder_changed();
-        self.send_ui_message(UiMessage::StatusUpdate(format!("Loaded folder: {}", path.to_string())));
+        self.status_message = QString::from(format!("Loaded folder: {}", path.to_string()));
+        self.status_changed();
     }
 
     fn search_metadata(&mut self, query: QString, _by_asin: bool) {
@@ -243,30 +191,19 @@ impl LecternController {
 
         // Create thread-safe callback for conversion updates
         let qptr = QPointer::from(&*self);
-        let update_progress = queued_callback(move |update: ConversionUpdate| {
+        let update_progress = queued_callback(move |update: Result<String, String>| {
             if let Some(pinned) = qptr.as_pinned() {
                 let mut controller = pinned.borrow_mut();
                 match update {
-                    ConversionUpdate::Progress(progress, message) => {
-                        controller.progress_value = progress;
+                    Ok(message) => {
                         controller.status_message = QString::from(message);
-                        controller.progress_changed();
                         controller.status_changed();
                     }
-                    ConversionUpdate::Log(message) => {
-                        controller.log_message(QString::from(message));
-                    }
-                    ConversionUpdate::Complete(success, message) => {
-                        controller.progress_value = 1.0;
-                        controller.status_message = QString::from(message.clone());
+                    Err(error) => {
+                        controller.status_message = QString::from(error);
+                        controller.error_occurred(QString::from("Conversion failed"));
+                        controller.status_changed();
                         controller.is_processing = false;
-                        if success {
-                            controller.conversion_completed();
-                        } else {
-                            controller.error_occurred(QString::from(message));
-                        }
-                        controller.progress_changed();
-                        controller.status_changed();
                         controller.processing_changed();
                     }
                 }
@@ -276,14 +213,11 @@ impl LecternController {
         // Start background conversion
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            runtime.block_on(async {
-                update_progress(ConversionUpdate::Progress(0.1, "Scanning audio files...".to_string()));
-
+            let result = runtime.block_on(async {
                 // Validate input
                 let input_dir = PathBuf::from(folder);
                 if !input_dir.exists() {
-                    update_progress(ConversionUpdate::Complete(false, "Input directory does not exist".to_string()));
-                    return;
+                    return Err("Input directory does not exist".to_string());
                 }
 
                 // Generate output path
@@ -292,43 +226,28 @@ impl LecternController {
                     .unwrap_or(&input_dir)
                     .join(format!("{}.m4b", metadata.title.replace(":", "").replace("/", "")));
 
-                update_progress(ConversionUpdate::Progress(0.2, "Converting audio files...".to_string()));
-
                 // Convert to M4B
-                match AudioService::convert_to_m4b_with_chapters(&input_dir, &output_path.to_string_lossy(), &metadata).await {
-                    Ok(_) => {
-                        update_progress(ConversionUpdate::Progress(0.7, "Applying metadata...".to_string()));
+                AudioService::convert_to_m4b_with_chapters(&input_dir, &output_path.to_string_lossy(), &metadata).await?;
 
-                        // Apply metadata
-                        match AudioService::apply_tags(&output_path.to_string_lossy(), &metadata).await {
-                            Ok(_) => {
-                                update_progress(ConversionUpdate::Progress(0.9, "Uploading to Audiobookshelf...".to_string()));
+                // Apply metadata
+                AudioService::apply_tags(&output_path.to_string_lossy(), &metadata).await?;
 
-                                // Upload to ABS if configured
-                                if !abs_config.host.is_empty() && !abs_config.token.is_empty() {
-                                    match AudioService::upload_and_scan(&output_path.to_string_lossy(), &abs_config).await {
-                                        Ok(_) => {
-                                            update_progress(ConversionUpdate::Complete(true, "Conversion and upload completed!".to_string()));
-                                        }
-                                        Err(e) => {
-                                            update_progress(ConversionUpdate::Log(format!("Upload error: {}", e)));
-                                            update_progress(ConversionUpdate::Complete(true, "Conversion completed, upload failed".to_string()));
-                                        }
-                                    }
-                                } else {
-                                    update_progress(ConversionUpdate::Complete(true, "Conversion completed!".to_string()));
-                                }
-                            }
-                            Err(e) => {
-                                update_progress(ConversionUpdate::Complete(false, format!("Metadata application failed: {}", e)));
-                            }
+                // Upload to ABS if configured
+                if !abs_config.host.is_empty() && !abs_config.token.is_empty() {
+                    match AudioService::upload_and_scan(&output_path.to_string_lossy(), &abs_config).await {
+                        Ok(_) => Ok("Conversion and upload completed!".to_string()),
+                        Err(e) => {
+                            println!("Upload error: {}", e);
+                            Ok("Conversion completed, upload failed".to_string())
                         }
                     }
-                    Err(e) => {
-                        update_progress(ConversionUpdate::Complete(false, format!("Conversion failed: {}", e)));
-                    }
+                } else {
+                    Ok("Conversion completed!".to_string())
                 }
             });
+
+            // Send result back to UI
+            update_progress(result);
         });
     }
 
@@ -340,52 +259,6 @@ impl LecternController {
         self.status_changed();
     }
 
-    /// Process UI messages from background threads (call this regularly from Qt event loop)
-    fn process_ui_messages(&mut self) {
-        let mut messages = Vec::new();
-
-        // First, collect all available messages to avoid holding the mutable borrow
-        if let Some(receiver) = &mut self.ui_receiver {
-            while let Ok(message) = receiver.try_recv() {
-                messages.push(message);
-            }
-        }
-
-        // Then process the messages without holding the receiver borrow
-        for message in messages {
-            match message {
-                UiMessage::StatusUpdate(msg) => {
-                    self.status_message = QString::from(msg);
-                    self.status_changed();
-                }
-                UiMessage::ProgressUpdate(progress) => {
-                    self.progress_value = progress;
-                    self.progress_changed();
-                }
-                UiMessage::ProcessingState(processing) => {
-                    self.is_processing = processing;
-                    self.processing_changed();
-                }
-                UiMessage::MetadataLoaded { title, author, series, narrator, cover_url } => {
-                    self.metadata_title = QString::from(title);
-                    self.metadata_author = QString::from(author);
-                    self.metadata_series = QString::from(series);
-                    self.metadata_narrator = QString::from(narrator);
-                    self.metadata_cover_url = QString::from(cover_url);
-                    self.metadata_changed();
-                }
-                UiMessage::LogMessage(msg) => {
-                    self.log_message(QString::from(msg));
-                }
-                UiMessage::ConversionComplete => {
-                    self.conversion_completed();
-                }
-                UiMessage::Error(msg) => {
-                    self.error_occurred(QString::from(msg));
-                }
-            }
-        }
-    }
 }
 
 fn main() {
@@ -400,52 +273,18 @@ fn main() {
     std::env::set_var("QT_QPA_PLATFORM", "xcb");
     println!("  → Forcing QT_QPA_PLATFORM=xcb (X11) for compatibility");
 
-    // Initialize Qt
+    // Initialize Qt environment (Crucial for GUI)
     init_qt_to_rust();
-    println!("✅ Qt initialized");
 
-    // Set up thread communication channels
-    let (ui_sender, mut ui_receiver) = mpsc::unbounded_channel();
-    println!("✅ Thread communication channels created");
-
-    // Create the controller wrapped in Arc<RefCell<>> and initialize it
-    let controller = Arc::new(RefCell::new(LecternController::default()));
-    controller.borrow_mut().initialize(ui_sender, ui_receiver);
-    println!("✅ LecternController created and initialized");
-
-    // Create QML engine
+    // Create and register the controller
+    let controller = RefCell::new(LecternController::default());
+    let controller_pinned = unsafe { QObjectPinned::new(&controller) };
     let mut engine = QmlEngine::new();
-    println!("✅ QmlEngine created");
+    engine.set_object_property("controller".into(), controller_pinned);
 
-    // Register the controller with QML
-    unsafe {
-        let controller_ptr = QObjectPinned::new(&*controller);
-        engine.set_object_property("controller".into(), controller_ptr);
-    }
-    println!("✅ Controller registered with QML");
+    // Load the UI
+    engine.load_file("qml/main.qml".into());
 
-    // Load our QML file
-    let qml_path = "qml/main.qml";
-    if !std::path::Path::new(qml_path).exists() {
-        println!("❌ QML file NOT found: {}", qml_path);
-        return;
-    }
-
-    println!("✅ QML file found: {}", qml_path);
-    engine.load_file(qml_path.into());
-    println!("✅ QML loaded");
-
-    println!("🚀 Starting Qt event loop...");
-    println!("💡 Lectern GUI should now be visible!");
-    println!("💡 Background tasks will update UI thread-safely");
-    println!("💡 Press Ctrl+C to exit");
-
-    // Start the Qt event loop
-    println!("🚀 Starting Qt event loop...");
-
-    // For now, we'll process messages synchronously in the main thread
-    // In a production app, you'd integrate this with Qt's signal-slot system
+    // Start the event loop (This blocks until the window is closed)
     engine.exec();
-
-    println!("✅ Qt event loop completed");
 }
