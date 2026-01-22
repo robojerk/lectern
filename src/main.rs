@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 mod services;
 
 use services::{AudioService, BookMetadata, ABSConfig};
@@ -6,6 +9,7 @@ use qmetaobject::*;
 use qmetaobject::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
+use url::Url;
 
 #[derive(QObject, Default)]
 pub struct LecternController {
@@ -25,9 +29,10 @@ pub struct LecternController {
     metadata_cover_url: qt_property!(QString; NOTIFY metadata_changed),
 
     // ABS settings
-    abs_host: qt_property!(QString),
-    abs_token: qt_property!(QString),
-    abs_library_id: qt_property!(QString),
+    abs_host: qt_property!(QString; NOTIFY config_changed),
+    abs_token: qt_property!(QString; NOTIFY config_changed),
+    abs_library_id: qt_property!(QString; NOTIFY config_changed),
+    config_changed: qt_signal!(),
 
 
     // Signals
@@ -74,7 +79,14 @@ impl LecternController {
         self.status_changed();
     }
 
-    fn save_config(&self) {
+    fn save_config(&mut self, url: QString, token: QString, id: QString) {
+        self.abs_host = url;
+        self.abs_token = token;
+        self.abs_library_id = id;
+
+        // Trigger the signal so the UI stays in sync
+        self.config_changed();
+
         // Save current settings to config file
         let config_path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
@@ -88,16 +100,39 @@ impl LecternController {
         });
 
         if let Ok(json) = serde_json::to_string_pretty(&config) {
-            let _ = std::fs::write(config_path, json);
+            if let Err(e) = std::fs::write(config_path, json) {
+                eprintln!("Failed to save config: {}", e);
+            } else {
+                println!("⚙️ Settings saved for: {}", self.abs_host.to_string());
+            }
         }
     }
 
 
-    fn set_folder_path(&mut self, path: QString) {
-        self.current_folder = path.clone();
+    fn set_folder_path(&mut self, url_string: QString) {
+        let raw_url = url_string.to_string();
+
+        // Parse the string as a URL to handle file:// protocol correctly
+        let path = if let Ok(parsed_url) = Url::parse(&raw_url) {
+            if parsed_url.scheme() == "file" {
+                // to_file_path() handles %20 encoding, Windows vs Unix slashes, etc.
+                parsed_url.to_file_path().unwrap_or_else(|_| PathBuf::from(&raw_url))
+            } else {
+                PathBuf::from(&raw_url)
+            }
+        } else {
+            PathBuf::from(&raw_url)
+        };
+
+        // Store the clean, absolute path string
+        let path_str = path.to_string_lossy().to_string();
+        self.current_folder = QString::from(path_str.clone());
         self.folder_changed();
-        self.status_message = QString::from(format!("Loaded folder: {}", path.to_string()));
+
+        self.status_message = QString::from(format!("Loaded folder: {}", path_str));
         self.status_changed();
+
+        println!("📂 Folder set to: {:?}", path);
     }
 
     fn search_metadata(&mut self, query: QString, _by_asin: bool) {
@@ -262,18 +297,10 @@ impl LecternController {
 }
 
 fn main() {
-    println!("🎵 Qt Lectern - Full GUI Application with Thread-Safe Updates");
-
-    // Check environment
-    println!("🔍 Environment check:");
-    println!("  DISPLAY: {:?}", std::env::var("DISPLAY").unwrap_or("Not set".to_string()));
-    println!("  WAYLAND_DISPLAY: {:?}", std::env::var("WAYLAND_DISPLAY").unwrap_or("Not set".to_string()));
-
-    // Force XCB platform for better compatibility
-    std::env::set_var("QT_QPA_PLATFORM", "xcb");
-    println!("  → Forcing QT_QPA_PLATFORM=xcb (X11) for compatibility");
-
     // Initialize Qt environment (Crucial for GUI)
+    if std::env::var("QT_QPA_PLATFORM").is_err() {
+        std::env::set_var("QT_QPA_PLATFORM", "xcb");
+    }
     init_qt_to_rust();
 
     // Create and register the controller

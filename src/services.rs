@@ -116,13 +116,8 @@ impl AudioService {
     }
 
     /// Search using Audible's unofficial search API (fallback)
-    async fn search_audible(client: &Client, query: &str) -> Result<BookMetadata, String> {
+    async fn search_audible(_client: &Client, _query: &str) -> Result<BookMetadata, String> {
         // This is a simplified fallback - in practice you'd use a more robust search
-        let search_url = format!(
-            "https://www.audible.com/search?keywords={}",
-            urlencoding::encode(query)
-        );
-
         // For now, return a mock result since Audible's API is restricted
         // In a real implementation, you'd scrape or use a proxy service
         Err("Audible search not implemented - use Audnexus for now".to_string())
@@ -278,7 +273,7 @@ impl AudioService {
     }
 
     /// Trigger a library scan for the uploaded item
-    async fn trigger_library_scan(client: &Client, config: &ABSConfig, item_id: &str) -> Result<(), String> {
+    async fn trigger_library_scan(client: &Client, config: &ABSConfig, _item_id: &str) -> Result<(), String> {
         let scan_url = format!("{}/api/libraries/{}/scan", config.host.trim_end_matches('/'), config.library_id);
 
         let scan_data = serde_json::json!({

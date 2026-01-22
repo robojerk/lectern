@@ -4,12 +4,11 @@ import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 
-Window {
-    id: window
+ApplicationWindow {
     visible: true
-    width: 900
-    height: 700
-    title: "Lectern - Audiobook Processor"
+    width: 600
+    height: 400
+    title: "Lectern - Audiobook Tool"
 
     Material.theme: Material.Dark
     Material.accent: Material.Purple
@@ -17,38 +16,149 @@ Window {
     Material.background: Material.color(Material.Grey, Material.Shade900)
     Material.foreground: Material.color(Material.Grey, Material.Shade50)
 
-    // Drop area for files
-    DropArea {
-        id: dropArea
+    ColumnLayout {
         anchors.fill: parent
+        anchors.margins: 20
+        spacing: 15
 
-        onDropped: {
-            if (drop.hasUrls) {
-                var url = drop.urls[0]
-                console.log("Dropped file:", url)
-                if (controller) {
-                    controller.set_folder_path(url)
+        // Settings button at the top
+        RowLayout {
+            Layout.fillWidth: true
+
+            Item { Layout.fillWidth: true } // Spacer
+
+            Button {
+                text: "⚙ Settings"
+                onClicked: settingsDialog.open()
+            }
+        }
+
+        // Drag & Drop Area
+        DropArea {
+            id: dropArea
+            Layout.fillWidth: true
+            Layout.preferredHeight: 150
+
+            Rectangle {
+                anchors.fill: parent
+                color: dropArea.containsDrag ? "#e0e0e0" : "#f5f5f5"
+                border.color: "#cccccc"
+                radius: 10
+
+                Label {
+                    anchors.centerIn: parent
+                    text: dropArea.containsDrag ? "Drop Folder Now" : "Drag Audiobook Folder Here"
+                    color: "#666666"
+                    font.pixelSize: 16
+                }
+            }
+
+            onDropped: (drop) => {
+                if (drop.hasUrls) {
+                    // Extract the path (removing 'file://' prefix if needed)
+                    let path = drop.urls[0].toString();
+                    if (controller) {
+                        controller.set_folder_path(path);
+                    }
                 }
             }
         }
 
-        Rectangle {
-            id: dropIndicator
-            anchors.fill: parent
-            color: dropArea.containsDrag ? Material.color(Material.Purple, Material.Shade200).alpha(0.1) : "transparent"
-            border.color: dropArea.containsDrag ? Material.accent : "transparent"
-            border.width: 2
-            radius: 8
-            visible: dropArea.containsDrag
+        // Status & Actions
+        Label {
+            text: "Path: " + (controller ? controller.current_folder : "No folder selected")
+            Layout.fillWidth: true
+            elide: Text.ElideMiddle
+            font.pixelSize: 12
+        }
 
-            Label {
-                anchors.centerIn: parent
-                text: "Drop audiobook files here 📁"
-                font.pixelSize: 24
-                color: Material.accent
-                opacity: 0.8
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 10
+
+            Button {
+                text: "🔍 Search Metadata"
+                enabled: controller && controller.current_folder !== "" && !controller.is_processing
+                onClicked: {
+                    if (controller) {
+                        controller.search_metadata("test query", false);
+                    }
+                }
+            }
+
+            Button {
+                text: controller && controller.is_processing ? "⏸️ Converting..." : "🚀 Start Conversion"
+                enabled: controller && controller.current_folder !== "" && !controller.is_processing
+                onClicked: {
+                    if (controller) {
+                        controller.start_conversion();
+                    }
+                }
             }
         }
+
+        // Status message
+        Label {
+            text: controller ? controller.status_message : "Ready"
+            Layout.fillWidth: true
+            font.pixelSize: 12
+            opacity: 0.8
+        }
+
+        // Progress bar
+        ProgressBar {
+            Layout.fillWidth: true
+            value: controller ? controller.progress_value : 0.0
+            visible: controller && (controller.is_processing || controller.progress_value > 0)
+        }
+
+        Item { Layout.fillHeight: true } // Spacer
+    }
+
+    // Settings Dialog
+    Dialog {
+        id: settingsDialog
+        title: "Audiobookshelf Settings"
+        standardButtons: Dialog.Save | Dialog.Cancel
+        anchors.centerIn: parent
+        modal: true
+        width: 400
+
+        ColumnLayout {
+            spacing: 15
+            width: parent.width
+
+            Label { text: "Server URL" }
+            TextField {
+                id: urlField
+                Layout.fillWidth: true
+                placeholderText: "https://abs.yourdomain.com"
+                text: controller ? controller.abs_host : ""
+            }
+
+            Label { text: "API Token" }
+            TextField {
+                id: tokenField
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                text: controller ? controller.abs_token : ""
+            }
+
+            Label { text: "Library ID" }
+            TextField {
+                id: libraryField
+                Layout.fillWidth: true
+                text: controller ? controller.abs_library_id : ""
+            }
+        }
+
+        onAccepted: {
+            if (controller) {
+                controller.save_config(urlField.text, tokenField.text, libraryField.text);
+            }
+        }
+    }
+}
     }
 
     // Main content area

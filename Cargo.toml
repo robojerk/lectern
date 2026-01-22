@@ -24,6 +24,7 @@ audiotags = "0.5.0"
 
 # URL Encoding & utilities
 urlencoding = "2.1"
+url = "2.5"
 dirs = "5.0"
 
 [dev-dependencies]
