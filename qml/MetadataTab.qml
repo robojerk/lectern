@@ -221,6 +221,12 @@ Item {
                         placeholderText: "Enter title, author, or ASIN..."
                         Layout.fillWidth: true
                         Material.accent: Material.DeepPurple
+                        onAccepted: {
+                            if (controller && text !== "") {
+                                var byAsin = searchTypeCombo.currentIndex === 1
+                                controller.search_metadata(text, byAsin)
+                            }
+                        }
                     }
 
                     ComboBox {
@@ -296,7 +302,7 @@ Item {
                                     controller.metadata_title = controller.search_title
                                     controller.metadata_author = controller.search_author
                                     controller.metadata_cover_url = controller.search_cover_url
-
+                                    
                                     // Update the text fields
                                     titleField.text = controller.metadata_title
                                     authorField.text = controller.metadata_author
