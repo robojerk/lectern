@@ -8,6 +8,7 @@ use services::{AudioService, BookMetadata, ABSConfig};
 use qmetaobject::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
+use std::ffi::CStr;
 use url::Url;
 
 #[derive(QObject, Default)]
@@ -170,7 +171,9 @@ impl LecternController {
                 // Grab the first result and update search result properties
                 if let Some(book) = results.first() {
                     s.search_title = book.title.clone().into();
-                    s.search_author = book.author().into();
+                    // Join authors with commas
+                    let author_str = book.authors.join(", ");
+                    s.search_author = author_str.into();
                     s.search_cover_url = book.image_url.clone().into();
                     s.status_message = QString::from("Search completed");
                 } else {
@@ -343,11 +346,15 @@ fn main() {
     
     // Initialize qmetaobject
     println!("Initializing Qt...");
+    // Using c-string literals (requires Rust 1.77+) or the cstr crate
+    // For compatibility, we'll construct CStr at runtime
+    let uri = std::ffi::CString::new("Lectern").unwrap();
+    let type_name = std::ffi::CString::new("LecternController").unwrap();
     qmetaobject::qml_register_type::<LecternController>(
-        "Lectern",
+        uri.as_c_str(),
         1,
         0,
-        "LecternController",
+        type_name.as_c_str(),
     );
     println!("Qt initialized successfully");
 
