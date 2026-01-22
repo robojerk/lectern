@@ -4,7 +4,6 @@ mod services;
 use services::{AudioService, BookMetadata, ABSConfig};
 
 use qmetaobject::*;
-use qmetaobject::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use url::Url;
@@ -130,6 +129,7 @@ impl LecternController {
 
     fn set_folder_path(&mut self, url_string: QString) {
         let raw_url = url_string.to_string();
+        println!("🔍 set_folder_path called with: {}", raw_url);
 
         // Parse the string as a URL to handle file:// protocol correctly
         let path = if let Ok(parsed_url) = Url::parse(&raw_url) {
@@ -145,6 +145,7 @@ impl LecternController {
 
         // Store the clean, absolute path string
         let path_str = path.to_string_lossy().to_string();
+        println!("📂 Resolved path: {}", path_str);
         self.current_folder = QString::from(path_str.clone());
         self.folder_changed();
 
@@ -319,7 +320,10 @@ impl LecternController {
             });
 
             // Send result back to UI
-            update_progress(result);
+            match result {
+                Ok(msg) => update_progress(ConversionUpdate::Complete(true, msg)),
+                Err(err) => update_progress(ConversionUpdate::Complete(false, err)),
+            }
         });
     }
 
@@ -351,6 +355,10 @@ fn main() {
     let controller = RefCell::new(LecternController::default());
     let controller_pinned = unsafe { QObjectPinned::new(&controller) };
     let mut engine = QmlEngine::new();
+
+    // Add the qml directory so main.qml can find MetadataTab.qml, etc.
+    engine.add_import_path("qml".into());
+
     engine.set_object_property("controller".into(), controller_pinned);
 
     // Load the UI

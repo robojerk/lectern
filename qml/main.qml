@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import QtQuick.Dialogs 1.3
 
 ApplicationWindow {
     visible: true
@@ -47,19 +48,40 @@ ApplicationWindow {
 
                 Label {
                     anchors.centerIn: parent
-                    text: dropArea.containsDrag ? "Drop Folder Now" : "Drag Audiobook Folder Here"
+                    text: dropArea.containsDrag ? "Drop Folder Now" : "Drag Audiobook Folder Here\n(or click to browse)"
                     color: "#666666"
                     font.pixelSize: 16
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: folderDialog.open()
                 }
             }
 
-            onDropped: (drop) => {
-                if (drop.hasUrls) {
-                    // Extract the path (removing 'file://' prefix if needed)
-                    let path = drop.urls[0].toString();
+            onEntered: {
+                console.log("Drag entered drop area")
+            }
+
+            onExited: {
+                console.log("Drag exited drop area")
+            }
+
+            onDropped: function(drop) {
+                console.log("Drop event received:", drop.urls)
+                drop.accept(Qt.CopyAction)
+                if (drop.hasUrls && drop.urls.length > 0) {
+                    var url = drop.urls[0]
+                    console.log("Processing URL:", url.toString())
                     if (controller) {
-                        controller.set_folder_path(path);
+                        controller.set_folder_path(url.toString());
+                        console.log("Called controller.set_folder_path")
+                    } else {
+                        console.log("Controller is null!")
                     }
+                } else {
+                    console.log("Drop does not have URLs or no URLs in array")
                 }
             }
         }
@@ -229,6 +251,17 @@ ApplicationWindow {
         onAccepted: {
             if (controller) {
                 controller.save_config(urlField.text, tokenField.text, libraryField.text);
+            }
+        }
+    }
+
+    // Folder selection dialog
+    FolderDialog {
+        id: folderDialog
+        title: "Select Audiobook Folder"
+        onAccepted: {
+            if (controller) {
+                controller.set_folder_path(selectedFolder.toString());
             }
         }
     }

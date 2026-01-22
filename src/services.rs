@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use tokio::process::Command;
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
@@ -151,45 +150,43 @@ impl AudioService {
         Self::create_concat_file(&mp3_files, &concat_file).await?;
 
         // Run ffmpeg conversion with metadata
-        let mut ffmpeg_args = vec![
-            "-f", "concat",
-            "-safe", "0",
-            "-i", &concat_file,
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-movflags", "+faststart",
+        let mut ffmpeg_args: Vec<String> = vec![
+            "-f".to_string(),
+            "concat".to_string(),
+            "-safe".to_string(),
+            "0".to_string(),
+            "-i".to_string(),
+            concat_file.clone(),
+            "-c:a".to_string(),
+            "aac".to_string(),
+            "-b:a".to_string(),
+            "128k".to_string(),
+            "-movflags".to_string(),
+            "+faststart".to_string(),
         ];
 
-        // Add metadata - create owned strings to avoid lifetime issues
-        let title_metadata = format!("title={}", metadata.title);
-        let artist_metadata = format!("artist={}", metadata.authors.join(", "));
-        ffmpeg_args.extend_from_slice(&[
-            "-metadata", &title_metadata,
-            "-metadata", &artist_metadata,
-        ]);
+        // Add metadata - push owned strings to avoid lifetime issues
+        ffmpeg_args.push("-metadata".to_string());
+        ffmpeg_args.push(format!("title={}", metadata.title));
+        ffmpeg_args.push("-metadata".to_string());
+        ffmpeg_args.push(format!("artist={}", metadata.authors.join(", ")));
 
         if let Some(series) = &metadata.series_name {
-            let album_metadata = format!("album={}", series);
-            ffmpeg_args.extend_from_slice(&[
-                "-metadata", &album_metadata,
-            ]);
+            ffmpeg_args.push("-metadata".to_string());
+            ffmpeg_args.push(format!("album={}", series));
         }
 
         if let Some(narrators) = &metadata.narrator_names {
-            let composer_metadata = format!("composer={}", narrators.join(", "));
-            ffmpeg_args.extend_from_slice(&[
-                "-metadata", &composer_metadata,
-            ]);
+            ffmpeg_args.push("-metadata".to_string());
+            ffmpeg_args.push(format!("composer={}", narrators.join(", ")));
         }
 
         if let Some(duration) = metadata.duration_minutes {
-            let duration_metadata = format!("duration={}", duration);
-            ffmpeg_args.extend_from_slice(&[
-                "-metadata", &duration_metadata,
-            ]);
+            ffmpeg_args.push("-metadata".to_string());
+            ffmpeg_args.push(format!("duration={}", duration));
         }
 
-        ffmpeg_args.push(&output_path);
+        ffmpeg_args.push(output_path.to_string());
 
         let status = Command::new("ffmpeg")
             .args(&ffmpeg_args)
@@ -245,7 +242,7 @@ impl AudioService {
     }
 
     /// Apply metadata tags to M4B file
-    pub async fn apply_tags(file_path: &str, metadata: &BookMetadata) -> Result<(), String> {
+    pub async fn apply_tags(_file_path: &str, metadata: &BookMetadata) -> Result<(), String> {
         // For now, use FFmpeg to add metadata during the conversion process
         // This is more reliable than trying to modify tags after creation
         println!("Metadata will be applied during FFmpeg conversion:");
