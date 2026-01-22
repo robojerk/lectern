@@ -1,0 +1,14 @@
+[env]
+# Homebrew Qt5 paths for qmetaobject
+PKG_CONFIG_PATH = "/home/linuxbrew/.linuxbrew/opt/qt@5/lib/pkgconfig"
+QT_INCLUDE_PATH = "/home/linuxbrew/.linuxbrew/opt/qt@5/include"
+QT_LIBRARY_PATH = "/home/linuxbrew/.linuxbrew/opt/qt@5/lib"
+LD_LIBRARY_PATH = "/home/linuxbrew/.linuxbrew/opt/qt@5/lib"
+CMAKE_PREFIX_PATH = "/home/linuxbrew/.linuxbrew/opt/qt@5"
+# Add Mesa OpenGL headers
+CFLAGS = "-I/home/linuxbrew/.linuxbrew/include"
+CXXFLAGS = "-I/home/linuxbrew/.linuxbrew/include"
+
+[build]
+# Use all available CPU cores for faster builds
+jobs = 8

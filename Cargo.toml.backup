@@ -8,9 +8,10 @@ name = "lectern"
 path = "src/main.rs"
 
 [dependencies]
-# Qt/QML UI Stack - qmetaobject with Qt5
+# Qt/QML UI Stack
 qmetaobject = "0.2"
 cpp = "0.5"
+qt6 = { version = "0.4", features = ["widgets", "gui", "quick", "qml"] }
 
 # Async & Networking
 tokio = { version = "1.32", features = ["full", "fs", "process", "io-util"] }
