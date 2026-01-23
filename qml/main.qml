@@ -154,19 +154,31 @@ ApplicationWindow {
     }
 
     // Settings dialog
-    Dialog {
+    Popup {
         id: settingsDialog
-        title: "Settings"
-        standardButtons: Dialog.Ok | Dialog.Cancel
         modal: true
         width: 600
         height: 500
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
+        anchors.centerIn: parent
 
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
+
+            // Header
+            Rectangle {
+                Layout.fillWidth: true
+                height: 50
+                color: Material.color(Material.Grey, Material.Shade800)
+
+                Label {
+                    text: "Settings"
+                    font.bold: true
+                    font.pixelSize: 18
+                    anchors.centerIn: parent
+                    color: Material.primaryColor
+                }
+            }
 
             ScrollView {
                 Layout.fillWidth: true
@@ -307,11 +319,33 @@ ApplicationWindow {
                 }
             }
             }
-        }
 
-        onAccepted: {
-            if (controller) {
-                controller.save_config(hostField.text, tokenField.text, libraryField.text, localLibraryField.text, pathTemplateField.text)
+            // Footer with buttons
+            Rectangle {
+                Layout.fillWidth: true
+                height: 60
+                color: Material.color(Material.Grey, Material.Shade800)
+
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 16
+
+                    Button {
+                        text: "Cancel"
+                        onClicked: settingsDialog.close()
+                    }
+
+                    Button {
+                        text: "OK"
+                        highlighted: true
+                        onClicked: {
+                            if (controller) {
+                                controller.save_config(hostField.text, tokenField.text, libraryField.text, localLibraryField.text, pathTemplateField.text)
+                            }
+                            settingsDialog.close()
+                        }
+                    }
+                }
             }
         }
     }
@@ -325,20 +359,39 @@ ApplicationWindow {
     }
 
     // Error dialog
-    Dialog {
+    Popup {
         id: errorDialog
-        title: "Error"
-        standardButtons: Dialog.Ok
         modal: true
         width: 400
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
+        height: 200
+        anchors.centerIn: parent
 
-        Label {
-            id: errorLabel
-            text: ""
-            wrapMode: Text.Wrap
-            width: parent.width
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 16
+
+            Label {
+                text: "Error"
+                font.bold: true
+                font.pixelSize: 18
+                color: Material.primaryColor
+            }
+
+            Label {
+                id: errorLabel
+                text: ""
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+
+            Item { Layout.fillHeight: true }
+
+            Button {
+                text: "OK"
+                Layout.alignment: Qt.AlignRight
+                onClicked: errorDialog.close()
+            }
         }
     }
 
