@@ -4,15 +4,15 @@ A Qt/QML-based desktop application for preparing audiobooks for Audiobookshelf s
 
 ## Features
 
-✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app
-✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information
-✅ **Editable Metadata** - Review and modify title, author, series, and narrator
-🔄 **Chapter Generation** - Automatic chapter creation from MP3 files (coming soon)
-✅ **M4B Conversion** - High-quality AAC encoding with FFmpeg
-✅ **Metadata Tagging** - Embeds metadata during FFmpeg conversion
-✅ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan
-✅ **Real-Time Logging** - See exactly what's happening during processing
-✅ **Progress Tracking** - Visual feedback throughout the conversion pipeline  
+✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app \
+✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information \
+✅ **Editable Metadata** - Review and modify title, author, series, and narrator \
+🔄 **Chapter Generation** - Automatic chapter creation from MP3 files (coming soon) \
+✅ **M4B Conversion** - High-quality AAC encoding with FFmpeg \
+✅ **Metadata Tagging** - Embeds metadata during FFmpeg conversion \
+✅ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan \
+✅ **Real-Time Logging** - See exactly what's happening during processing \
+✅ **Progress Tracking** - Visual feedback throughout the conversion pipeline
 
 ## Project Structure
 

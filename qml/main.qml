@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
+import Qt.labs.platform 1.1
 
 ApplicationWindow {
     id: window
@@ -155,80 +156,171 @@ ApplicationWindow {
     // Settings dialog
     Dialog {
         id: settingsDialog
-        title: "Audiobookshelf Settings"
+        title: "Settings"
         standardButtons: Dialog.Ok | Dialog.Cancel
         modal: true
-        width: 500
+        width: 600
+        height: 500
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
 
         ColumnLayout {
-            spacing: 16
-            width: parent.width
+            anchors.fill: parent
+            spacing: 0
 
-            Label {
-                text: "Configure your Audiobookshelf server connection:"
-                font.pixelSize: 14
-                opacity: 0.8
-            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
 
-            ColumnLayout {
-                spacing: 4
+                ColumnLayout {
+                    spacing: 16
+                    width: settingsDialog.width - 32
 
                 Label {
-                    text: "Server URL"
-                    font.pixelSize: 11
-                    opacity: 0.7
+                    text: "Audiobookshelf Server Connection:"
+                    font.pixelSize: 14
+                    opacity: 0.8
                 }
 
-                TextField {
-                    id: hostField
-                    placeholderText: "https://abs.yourdomain.com"
-                    text: controller ? controller.abs_host : ""
+                ColumnLayout {
+                    spacing: 4
+
+                    Label {
+                        text: "Server URL"
+                        font.pixelSize: 11
+                        opacity: 0.7
+                    }
+
+                    TextField {
+                        id: hostField
+                        placeholderText: "https://abs.yourdomain.com"
+                        text: controller ? controller.abs_host : ""
+                        Layout.fillWidth: true
+                    }
+                }
+
+                ColumnLayout {
+                    spacing: 4
+
+                    Label {
+                        text: "API Token"
+                        font.pixelSize: 11
+                        opacity: 0.7
+                    }
+
+                    TextField {
+                        id: tokenField
+                        placeholderText: "Your API token"
+                        text: controller ? controller.abs_token : ""
+                        echoMode: TextInput.Password
+                        Layout.fillWidth: true
+                    }
+                }
+
+                ColumnLayout {
+                    spacing: 4
+
+                    Label {
+                        text: "Library ID"
+                        font.pixelSize: 11
+                        opacity: 0.7
+                    }
+
+                    TextField {
+                        id: libraryField
+                        placeholderText: "Library UUID"
+                        text: controller ? controller.abs_library_id : ""
+                        Layout.fillWidth: true
+                    }
+                }
+
+                Rectangle {
+                    height: 1
+                    color: Material.color(Material.Grey, Material.Shade700)
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    Layout.bottomMargin: 8
+                }
+
+                Label {
+                    text: "Local Library (Optional):"
+                    font.pixelSize: 14
+                    opacity: 0.8
+                }
+
+                ColumnLayout {
+                    spacing: 4
+
+                    Label {
+                        text: "Library Path"
+                        font.pixelSize: 11
+                        opacity: 0.7
+                    }
+
+                    RowLayout {
+                        TextField {
+                            id: localLibraryField
+                            placeholderText: "/home/user/audiobooks"
+                            text: controller ? controller.local_library_path : ""
+                            Layout.fillWidth: true
+                        }
+
+                        Button {
+                            text: "Browse..."
+                            onClicked: localLibraryDialog.open()
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    spacing: 4
+
+                    Label {
+                        text: "Path Template"
+                        font.pixelSize: 11
+                        opacity: 0.7
+                    }
+
+                    TextField {
+                        id: pathTemplateField
+                        placeholderText: "{Path to Local Library}/{Author}/{Title}.m4b"
+                        text: controller ? controller.path_template : "{Path to Local Library}/{Author}/{Title}.m4b"
+                        Layout.fillWidth: true
+                    }
+                }
+
+                Label {
+                    text: "Available placeholders: {Author}, {Series}, {Title}, {SeriesNumber}, {Year}, {Quality}"
+                    font.pixelSize: 10
+                    opacity: 0.6
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: "Example: {Path to Local Library}/{Author}/{Series}/Book {SeriesNumber}- {Title}.m4b"
+                    font.pixelSize: 10
+                    opacity: 0.6
+                    wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
             }
-
-            ColumnLayout {
-                spacing: 4
-
-                Label {
-                    text: "API Token"
-                    font.pixelSize: 11
-                    opacity: 0.7
-                }
-
-                TextField {
-                    id: tokenField
-                    placeholderText: "Your API token"
-                    text: controller ? controller.abs_token : ""
-                    echoMode: TextInput.Password
-                    Layout.fillWidth: true
-                }
-            }
-
-            ColumnLayout {
-                spacing: 4
-
-                Label {
-                    text: "Library ID"
-                    font.pixelSize: 11
-                    opacity: 0.7
-                }
-
-                TextField {
-                    id: libraryField
-                    placeholderText: "Library UUID"
-                    text: controller ? controller.abs_library_id : ""
-                    Layout.fillWidth: true
-                }
             }
         }
 
         onAccepted: {
             if (controller) {
-                controller.save_config(hostField.text, tokenField.text, libraryField.text)
+                controller.save_config(hostField.text, tokenField.text, libraryField.text, localLibraryField.text, pathTemplateField.text)
             }
+        }
+    }
+
+    FolderDialog {
+        id: localLibraryDialog
+        title: "Select Local Library Folder"
+        onAccepted: {
+            localLibraryField.text = localLibraryDialog.folder.toString().replace("file://", "")
         }
     }
 

@@ -121,8 +121,22 @@ Item {
                 RowLayout {
                     TextField {
                         id: searchField
-                        placeholderText: "Search by title or author..."
+                        placeholderText: "Search by title, author, or ASIN..."
                         Layout.fillWidth: true
+                    }
+
+                    ComboBox {
+                        id: providerCombo
+                        model: [
+                            { text: "All Providers", value: "all" },
+                            { text: "Audnexus", value: "audnexus" },
+                            { text: "Google Books", value: "google" },
+                            { text: "Open Library", value: "openlibrary" }
+                        ]
+                        textRole: "text"
+                        valueRole: "value"
+                        currentIndex: 0
+                        Layout.preferredWidth: 140
                     }
 
                     Button {
@@ -131,7 +145,11 @@ Item {
                         enabled: controller && !controller.is_processing && searchField.text !== ""
                         onClicked: {
                             if (controller) {
-                                controller.search_metadata(searchField.text, false)
+                                if (providerCombo.currentValue === "all") {
+                                    controller.search_metadata(searchField.text, false)
+                                } else {
+                                    controller.search_metadata_with_provider(searchField.text, providerCombo.currentValue)
+                                }
                             }
                         }
                     }

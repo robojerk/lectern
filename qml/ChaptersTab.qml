@@ -19,12 +19,34 @@ Item {
             Item { Layout.fillWidth: true }
 
             Button {
+                text: "Get from Audible"
+                enabled: controller && controller.metadata_asin !== ""
+                onClicked: {
+                    // TODO: Implement chapter lookup from Audible
+                }
+            }
+
+            Button {
                 text: "Scan Folder"
                 enabled: controller && controller.current_folder !== ""
                 onClicked: {
                     if (controller) {
                         controller.scan_chapters()
                     }
+                }
+            }
+
+            Button {
+                text: "Add Chapter"
+                onClicked: {
+                    // TODO: Implement add chapter functionality
+                }
+            }
+
+            Button {
+                text: "Shift All +1s"
+                onClicked: {
+                    // TODO: Implement global time shift
                 }
             }
         }
@@ -39,17 +61,13 @@ Item {
                 clip: true
 
                 ListView {
-                    model: ListModel {
-                        ListElement { number: 1; title: "Chapter 1"; duration: "15:23" }
-                        ListElement { number: 2; title: "Chapter 2"; duration: "18:45" }
-                        ListElement { number: 3; title: "Chapter 3"; duration: "22:12" }
-                    }
-
+                    model: controller ? controller.chapters : []
                     spacing: 4
+
                     delegate: Rectangle {
                         width: ListView.view.width
-                        height: 50
-                        color: index % 2 === 0 ? 
+                        height: 60
+                        color: index % 2 === 0 ?
                             Material.color(Material.Grey, Material.Shade900) :
                             Material.color(Material.Grey, Material.Shade800)
                         radius: 4
@@ -60,13 +78,13 @@ Item {
                             spacing: 12
 
                             Label {
-                                text: model.number
+                                text: (index + 1).toString()
                                 font.bold: true
                                 Layout.preferredWidth: 30
                             }
 
                             TextField {
-                                text: model.title
+                                text: modelData.title || ""
                                 Layout.fillWidth: true
                                 background: Rectangle {
                                     color: "transparent"
@@ -75,9 +93,28 @@ Item {
                             }
 
                             Label {
-                                text: model.duration
+                                text: {
+                                    var startTime = modelData.start_time || 0;
+                                    var endTime = modelData.end_time || 0;
+                                    var duration = endTime - startTime;
+                                    return Math.floor(duration / 60) + ":" + (duration % 60).toString().padStart(2, '0');
+                                }
                                 opacity: 0.7
                                 Layout.preferredWidth: 60
+                            }
+
+                            CheckBox {
+                                text: "Lock"
+                                checked: modelData.locked || false
+                                Layout.preferredWidth: 60
+                            }
+
+                            Button {
+                                text: "▶️"
+                                font.pixelSize: 12
+                                Layout.preferredWidth: 40
+                                ToolTip.text: "Play chapter"
+                                ToolTip.visible: hovered
                             }
                         }
                     }

@@ -148,11 +148,11 @@ Convert (click to start conversion)
 
 The core functionality of Lectern is now implemented, featuring a tabbed interface for organizing the audiobook creation workflow.
 
-- [x] **UI Tabs**: Implemented Metadata, Cover, Chapters, and Convert tabs.
-- [x] **Metadata**: Integrated Audible API for searching book details.
-- [x] **Cover Art**: Async loading of cover art from search results.
-- [x] **Chapters**: Functional chapter editor with inline editing, locking, and global time shifts.
+- [x] **UI Tabs**: Implemented Metadata, Cover, Chapters, and Convert tabs with provider selection.
+- [x] **Metadata**: Multi-provider search (Audnexus, Google Books, Open Library) with automatic folder parsing.
+- [x] **Cover Art**: Search and download cover art from Audible, Google Books, Open Library with provider selection.
+- [x] **Chapters**: Auto-detection from filenames, manual editing, locking, and time shift controls.
 - [x] **Conversion**: M4B generation using FFmpeg with embedded chapters and tags.
 - [x] **Publishing**: Direct upload to Audiobookshelf with library scan trigger.
+- [x] **Local Library**: Path templating system with {Author}, {Series}, {Title}, etc. placeholders.
 
-[Progress Details](./PROGRESS.md)
