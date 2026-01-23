@@ -8,7 +8,6 @@ use services::{AudioService, BookMetadata, ABSConfig};
 use qmetaobject::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::ffi::CStr;
 use url::Url;
 
 #[derive(QObject, Default)]
@@ -60,14 +59,11 @@ pub struct LecternController {
 }
 
 impl LecternController {
-    /// Initialize the controller
     fn initialize(&mut self) {
-        // Load config
         self.load_config();
     }
 
     fn load_config(&mut self) {
-        // Load from config file
         let config_path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("lectern")
@@ -75,7 +71,6 @@ impl LecternController {
 
         if let Ok(content) = std::fs::read_to_string(config_path) {
             if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
-                // Load ABS settings if available
                 if let Some(host) = config.get("abs_host").and_then(|v| v.as_str()) {
                     self.abs_host = QString::from(host);
                 }
@@ -96,17 +91,13 @@ impl LecternController {
         self.abs_host = url;
         self.abs_token = token;
         self.abs_library_id = id;
-
-        // Trigger the signal so the UI stays in sync
         self.config_changed();
 
-        // Save current settings to config file
         let config_path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("lectern")
             .join("config.json");
 
-        // Create directory if it doesn't exist
         if let Some(parent) = config_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -121,7 +112,7 @@ impl LecternController {
             if let Err(e) = std::fs::write(&config_path, json) {
                 eprintln!("Failed to save config: {}", e);
             } else {
-                println!("⚙️ Settings saved for: {}", self.abs_host.to_string());
+                println!("⚙️ Settings saved");
             }
         }
     }
@@ -129,10 +120,8 @@ impl LecternController {
     fn set_folder_path(&mut self, url_string: QString) {
         let raw_url = url_string.to_string();
 
-        // Parse the string as a URL to handle file:// protocol correctly
         let path = if let Ok(parsed_url) = Url::parse(&raw_url) {
             if parsed_url.scheme() == "file" {
-                // to_file_path() handles %20 encoding, Windows vs Unix slashes, etc.
                 parsed_url.to_file_path().unwrap_or_else(|_| PathBuf::from(&raw_url))
             } else {
                 PathBuf::from(&raw_url)
@@ -141,7 +130,6 @@ impl LecternController {
             PathBuf::from(&raw_url)
         };
 
-        // Store the clean, absolute path string
         let path_str = path.to_string_lossy().to_string();
         self.current_folder = QString::from(path_str.clone());
         self.folder_changed();
@@ -156,22 +144,18 @@ impl LecternController {
         let qptr = QPointer::from(&*self);
         let query_str = query.to_string();
 
-        // Show loading state in UI
         self.is_processing = true;
         self.status_message = QString::from(format!("Searching for '{}'...", query_str));
         self.status_changed();
         self.processing_changed();
 
-        // Define the callback to update UI with results
         let on_complete = queued_callback(move |results: Vec<BookMetadata>| {
             if let Some(pinned) = qptr.as_pinned() {
                 let mut s = pinned.borrow_mut();
                 s.is_processing = false;
 
-                // Grab the first result and update search result properties
                 if let Some(book) = results.first() {
                     s.search_title = book.title.clone().into();
-                    // Join authors with commas
                     let author_str = book.authors.join(", ");
                     s.search_author = author_str.into();
                     s.search_cover_url = book.image_url.clone().into();
@@ -186,11 +170,9 @@ impl LecternController {
             }
         });
 
-        // Spawn background search
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
-                // Call Audnexus logic in services.rs
                 match AudioService::fetch_metadata(&query_str).await {
                     Ok(metadata) => on_complete(vec![metadata]),
                     Err(_) => on_complete(vec![]),
@@ -200,14 +182,11 @@ impl LecternController {
     }
 
     fn scan_chapters(&mut self) {
-        // Placeholder for chapter scanning
         self.status_message = QString::from("Chapter scanning not yet implemented");
         self.status_changed();
-        println!("📑 Scanning chapters from: {}", self.current_folder.to_string());
     }
 
     fn start_conversion(&mut self) {
-        // Get current metadata and folder
         let folder = self.current_folder.to_string();
         let metadata = BookMetadata {
             title: self.metadata_title.to_string(),
@@ -223,7 +202,7 @@ impl LecternController {
                 Some(self.metadata_series.to_string())
             },
             image_url: self.metadata_cover_url.to_string(),
-            asin: "".to_string(), // TODO: extract from search
+            asin: "".to_string(),
             duration_minutes: None,
             release_date: None,
         };
@@ -234,7 +213,6 @@ impl LecternController {
             library_id: self.abs_library_id.to_string(),
         };
 
-        // Set initial loading state on main thread
         self.is_processing = true;
         self.status_message = QString::from("Starting audio conversion...");
         self.progress_value = 0.0;
@@ -242,7 +220,6 @@ impl LecternController {
         self.status_changed();
         self.progress_changed();
 
-        // Create thread-safe callback for conversion updates
         let qptr = QPointer::from(&*self);
         let update_progress = queued_callback(move |update: Result<String, String>| {
             if let Some(pinned) = qptr.as_pinned() {
@@ -254,7 +231,6 @@ impl LecternController {
                         controller.processing_changed();
                         controller.status_changed();
                         
-                        // Fire completion signal
                         if message.contains("completed") {
                             controller.conversion_completed();
                         }
@@ -270,29 +246,22 @@ impl LecternController {
             }
         });
 
-        // Start background conversion
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let result = runtime.block_on(async {
-                // Validate input
                 let input_dir = PathBuf::from(folder);
                 if !input_dir.exists() {
                     return Err("Input directory does not exist".to_string());
                 }
 
-                // Generate output path
                 let output_path = input_dir
                     .parent()
                     .unwrap_or(&input_dir)
                     .join(format!("{}.m4b", metadata.title.replace(":", "").replace("/", "")));
 
-                // Convert to M4B
                 AudioService::convert_to_m4b_with_chapters(&input_dir, &output_path.to_string_lossy(), &metadata).await?;
-
-                // Apply metadata
                 AudioService::apply_tags(&output_path.to_string_lossy(), &metadata).await?;
 
-                // Upload to ABS if configured
                 if !abs_config.host.is_empty() && !abs_config.token.is_empty() {
                     match AudioService::upload_and_scan(&output_path.to_string_lossy(), &abs_config).await {
                         Ok(_) => Ok("✓ Conversion and upload completed!".to_string()),
@@ -306,13 +275,11 @@ impl LecternController {
                 }
             });
 
-            // Send result back to UI
             update_progress(result);
         });
     }
 
     fn cancel_conversion(&mut self) {
-        // For now, just reset the state (background task cancellation will be implemented later)
         self.is_processing = false;
         self.processing_changed();
         self.status_message = QString::from("Operation cancelled");
@@ -321,61 +288,35 @@ impl LecternController {
 }
 
 fn main() {
-    println!("🎵 LECTERN starting...");
-    println!("Arguments: {:?}", std::env::args().collect::<Vec<_>>());
+    println!("🎵 Starting Lectern...");
 
-    // Check display environment
-    println!("Checking display environment...");
-    if let Ok(display) = std::env::var("DISPLAY") {
-        println!("DISPLAY: {}", display);
-    }
-    if let Ok(wayland) = std::env::var("WAYLAND_DISPLAY") {
-        println!("WAYLAND_DISPLAY: {}", wayland);
-    }
-    
-    // Detect if we have a display
-    let has_display = std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok();
-    println!("Has display: {}", has_display);
-
-    // Initialize Qt environment
+    // Set Qt platform if not set
     if std::env::var("QT_QPA_PLATFORM").is_err() {
         std::env::set_var("QT_QPA_PLATFORM", "xcb");
     }
-    
-    println!("🎵 Starting Lectern GUI...");
-    
-    // Initialize qmetaobject
-    println!("Initializing Qt...");
-    // Using c-string literals (requires Rust 1.77+) or the cstr crate
-    // For compatibility, we'll construct CStr at runtime
-    let uri = std::ffi::CString::new("Lectern").unwrap();
-    let type_name = std::ffi::CString::new("LecternController").unwrap();
-    qmetaobject::qml_register_type::<LecternController>(
-        uri.as_c_str(),
-        1,
-        0,
-        type_name.as_c_str(),
-    );
-    println!("Qt initialized successfully");
 
-    // Create and register the controller
+    // Create controller
     let mut controller = LecternController::default();
     controller.initialize();
     let controller = RefCell::new(controller);
     let controller_pinned = unsafe { QObjectPinned::new(&controller) };
-    
+
+    // Create QML engine
     let mut engine = QmlEngine::new();
     engine.set_object_property("controller".into(), controller_pinned);
 
-    // Load the UI
-    println!("Loading main.qml...");
-    engine.load_file("qml/main.qml".into());
-    println!("main.qml loaded");
+    // Load QML - try absolute path first
+    let qml_path = std::path::Path::new("qml/main.qml");
+    if qml_path.exists() {
+        println!("Loading QML from: {:?}", qml_path.canonicalize().unwrap_or(qml_path.to_path_buf()));
+        engine.load_file("qml/main.qml".into());
+    } else {
+        eprintln!("❌ ERROR: qml/main.qml not found!");
+        eprintln!("Current directory: {:?}", std::env::current_dir());
+        std::process::exit(1);
+    }
 
-    println!("✅ Lectern window should now be visible!");
-    println!("If you don't see it, check your display environment.");
-    println!("Window title should be: 'Lectern - Audiobook Tool'");
-
-    // Start the event loop (This blocks until the window is closed)
+    println!("Starting Qt event loop...");
     engine.exec();
+    println!("Qt event loop ended");
 }

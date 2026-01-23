@@ -1,0 +1,6 @@
+module Lectern
+singleton Constants 1.0 Constants.qml
+MetadataTab 1.0 MetadataTab.qml
+CoverTab 1.0 CoverTab.qml
+ChaptersTab 1.0 ChaptersTab.qml
+ConvertTab 1.0 ConvertTab.qml
