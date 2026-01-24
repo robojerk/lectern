@@ -1,4 +1,4 @@
-kimport QtQuick 2.15
+import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
@@ -400,12 +400,121 @@ ApplicationWindow {
         id: searchResultsDialog
         controller: window.controller
         
+        // Explicit signal connection
+        Component.onCompleted: {
+            print("========================================")
+            print("[DEBUG] SearchResultsDialog Component.onCompleted")
+            print("[DEBUG] Connecting bookSelected signal explicitly...")
+            try {
+                searchResultsDialog.bookSelected.connect(function(book) {
+                    print("========================================")
+                    print("[DEBUG] [EXPLICIT CONNECT] Signal received!")
+                    print("[DEBUG] Book parameter:", book)
+                    handleBookSelected(book)
+                })
+                print("[DEBUG] Signal connection successful")
+            } catch(e) {
+                print("[DEBUG] ERROR connecting signal:", e)
+            }
+            print("========================================")
+        }
+        
+        // Also try the onBookSelected syntax
         onBookSelected: function(book) {
+            print("========================================")
+            print("[DEBUG] [onBookSelected SYNTAX] Handler called!")
+            print("[DEBUG] Book parameter:", book)
+            handleBookSelected(book)
+        }
+        
+        function handleBookSelected(book) {
             // Apply selected book metadata to the metadata tab
-            console.log("Selected book:", book.title)
-            // The controller should handle updating the metadata fields
+            print("[DEBUG] ===== onBookSelected handler called =====")
+            print("[DEBUG] Selected book object type:", typeof book)
+            print("[DEBUG] Book object:", JSON.stringify(book))
+            print("[DEBUG] Book title:", book ? book.title : "null")
+            print("[DEBUG] Book authors:", book ? book.authors : "null", "type:", book && book.authors ? typeof book.authors : "null")
+            print("[DEBUG] Book narrator_names:", book ? book.narrator_names : "null", "type:", book && book.narrator_names ? typeof book.narrator_names : "null")
+            print("[DEBUG] Book series_name:", book ? book.series_name : "null")
+            print("[DEBUG] Controller exists:", !!controller)
+            
+            // Extract fields from book object and pass to controller
             if (controller) {
-                controller.apply_search_result(book)
+                print("[DEBUG] Controller is valid, extracting fields...")
+                var title = book.title || ""
+                
+                // Handle authors - it's always a QVariantList from Rust
+                var author = ""
+                if (book.authors) {
+                    if (Array.isArray(book.authors)) {
+                        author = book.authors.join(", ")
+                    } else if (typeof book.authors === 'string') {
+                        author = book.authors
+                    } else {
+                        // Try to convert QVariantList to array
+                        var authorsArray = []
+                        var authorIdx = 0
+                        try {
+                            for (authorIdx = 0; authorIdx < book.authors.length; authorIdx++) {
+                                authorsArray.push(book.authors[authorIdx])
+                            }
+                            author = authorsArray.join(", ")
+                        } catch(err) {
+                            print("[DEBUG] Error extracting authors:", err)
+                            author = ""
+                        }
+                    }
+                }
+                
+                var series = book.series_name || ""
+                
+                // Handle narrator_names - it's a QVariantList from Rust
+                var narrator = ""
+                if (book.narrator_names) {
+                    if (Array.isArray(book.narrator_names)) {
+                        narrator = book.narrator_names.join(", ")
+                    } else if (typeof book.narrator_names === 'string') {
+                        narrator = book.narrator_names
+                    } else {
+                        // Try to convert QVariantList to array
+                        var narratorsArray = []
+                        var narratorIdx = 0
+                        try {
+                            for (narratorIdx = 0; narratorIdx < book.narrator_names.length; narratorIdx++) {
+                                narratorsArray.push(book.narrator_names[narratorIdx])
+                            }
+                            narrator = narratorsArray.join(", ")
+                        } catch(err) {
+                            print("[DEBUG] Error extracting narrators:", err)
+                            narrator = ""
+                        }
+                    }
+                }
+                
+                print("[DEBUG] Extracted values - title:", title, "author:", author, "series:", series, "narrator:", narrator)
+                print("[DEBUG] Calling apply_search_result with:", title, author, series, narrator)
+                try {
+                    controller.apply_search_result(title, author, series, narrator)
+                    print("[DEBUG] apply_search_result called successfully")
+                    print("[DEBUG] After apply_search_result, controller.book_title:", controller.book_title)
+                    print("[DEBUG] After apply_search_result, controller.book_author:", controller.book_author)
+                    print("[DEBUG] After apply_search_result, controller.book_series:", controller.book_series)
+                    print("[DEBUG] After apply_search_result, controller.book_narrator:", controller.book_narrator)
+                } catch(e) {
+                    print("[DEBUG] ERROR calling apply_search_result:", e)
+                }
+            } else {
+                print("[DEBUG] ERROR: controller is null!")
+            }
+            print("[DEBUG] ===== handleBookSelected finished =====")
+        }
+        
+        // Also try Connections as backup
+        Connections {
+            target: searchResultsDialog
+            function onBookSelected(book) {
+                print("[DEBUG] [Connections] Handler called via Connections")
+                // Don't call handleBookSelected again to avoid double processing
             }
         }
     }
@@ -432,7 +541,22 @@ ApplicationWindow {
         
         function onSearch_results_ready(results) {
             console.log("Search returned", results.length, "results")
+            console.log("First result:", JSON.stringify(results[0] || {}))
             searchResultsDialog.showResults(results)
+        }
+    }
+
+    // Timer to poll for search results
+    Timer {
+        id: searchResultsTimer
+        interval: 100  // Check every 100ms
+        running: true
+        repeat: true
+        onTriggered: {
+            if (controller) {
+                var results = controller.check_search_results()
+                // Results are automatically emitted via signal in check_search_results
+            }
         }
     }
 

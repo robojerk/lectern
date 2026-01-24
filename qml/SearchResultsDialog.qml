@@ -1,7 +1,7 @@
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Controls.Material
-import QtQuick.Layouts
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Controls.Material 2.15
+import QtQuick.Layouts 1.15
 
 Popup {
     id: searchResultsDialog
@@ -14,6 +14,14 @@ Popup {
     property var controller
     
     signal bookSelected(var book)
+    
+    // Test function to verify signal works
+    function testSignal() {
+        print("[DEBUG] testSignal() called")
+        var testBook = {title: "Test Book", authors: ["Test Author"]}
+        bookSelected(testBook)
+        print("[DEBUG] testSignal() emitted signal")
+    }
     
     ColumnLayout {
         anchors.fill: parent
@@ -73,10 +81,20 @@ Popup {
                     
                     Behavior on color { ColorAnimation { duration: 150 } }
                     
+                    // MouseArea for hover effect only, but don't block clicks
+                    MouseArea {
+                        id: mouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                        z: 0
+                    }
+                    
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: 12
                         spacing: 16
+                        z: 1
                         
                         // Cover image
                         Rectangle {
@@ -132,14 +150,16 @@ Popup {
                             
                             RowLayout {
                                 spacing: 12
-                                visible: modelData.narrator_names || modelData.series_name || modelData.release_date
+                                visible: !!(modelData.narrator_names && modelData.narrator_names.length > 0) || 
+                                         !!(modelData.series_name) || 
+                                         !!(modelData.release_date)
                                 
                                 Label {
                                     text: modelData.narrator_names ? 
                                           "🎙️ " + modelData.narrator_names.join(", ") : ""
                                     font.pixelSize: 12
                                     opacity: 0.7
-                                    visible: modelData.narrator_names
+                                    visible: !!(modelData.narrator_names && modelData.narrator_names.length > 0)
                                     Layout.maximumWidth: 200
                                     elide: Text.ElideRight
                                 }
@@ -149,7 +169,7 @@ Popup {
                                           "📖 " + modelData.series_name : ""
                                     font.pixelSize: 12
                                     opacity: 0.7
-                                    visible: modelData.series_name
+                                    visible: !!(modelData.series_name)
                                     Layout.maximumWidth: 150
                                     elide: Text.ElideRight
                                 }
@@ -159,7 +179,7 @@ Popup {
                                           "📅 " + modelData.release_date : ""
                                     font.pixelSize: 12
                                     opacity: 0.7
-                                    visible: modelData.release_date
+                                    visible: !!(modelData.release_date)
                                 }
                             }
                             
@@ -178,18 +198,38 @@ Popup {
                             text: "Use This"
                             highlighted: true
                             Material.accent: Material.DeepPurple
+                            enabled: true
+                            z: 10
                             onClicked: {
-                                bookSelected(modelData)
-                                searchResultsDialog.close()
+                                print("========================================")
+                                print("[DEBUG] BUTTON CLICKED!")
+                                print("[DEBUG] 'Use This' button clicked for book:", modelData ? modelData.title : "null")
+                                print("[DEBUG] modelData exists:", !!modelData)
+                                if (modelData) {
+                                    print("[DEBUG] modelData type:", typeof modelData)
+                                    try {
+                                        print("[DEBUG] modelData keys:", Object.keys(modelData))
+                                    } catch(e) {
+                                        print("[DEBUG] Could not get keys:", e)
+                                    }
+                                }
+                                print("[DEBUG] About to emit bookSelected signal...")
+                                try {
+                                    bookSelected(modelData)
+                                    print("[DEBUG] Signal emitted successfully")
+                                } catch(err) {
+                                    print("[DEBUG] ERROR emitting signal:", err, err.toString())
+                                }
+                                print("[DEBUG] About to close dialog...")
+                                try {
+                                    searchResultsDialog.close()
+                                    print("[DEBUG] Dialog close called")
+                                } catch(err) {
+                                    print("[DEBUG] ERROR closing dialog:", err)
+                                }
+                                print("========================================")
                             }
                         }
-                    }
-                    
-                    MouseArea {
-                        id: mouseArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
                     }
                     
                     Rectangle {
@@ -221,7 +261,19 @@ Popup {
     }
     
     function showResults(results) {
+        print("========================================")
+        print("[DEBUG] showResults() called")
+        print("[DEBUG] Results parameter:", results)
+        print("[DEBUG] Results length:", results ? results.length : 0)
+        if (results && results.length > 0) {
+            print("[DEBUG] First result:", JSON.stringify(results[0]))
+        }
         searchResults = results
+        print("[DEBUG] searchResults property set to:", searchResults)
+        print("[DEBUG] searchResults.length:", searchResults ? searchResults.length : 0)
+        print("[DEBUG] Opening dialog...")
         open()
+        print("[DEBUG] Dialog opened, visible:", visible)
+        print("========================================")
     }
 }
