@@ -1,4 +1,4 @@
-import QtQuick 2.15
+kimport QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
@@ -395,6 +395,21 @@ ApplicationWindow {
         }
     }
 
+    // Search results dialog
+    SearchResultsDialog {
+        id: searchResultsDialog
+        controller: window.controller
+        
+        onBookSelected: function(book) {
+            // Apply selected book metadata to the metadata tab
+            console.log("Selected book:", book.title)
+            // The controller should handle updating the metadata fields
+            if (controller) {
+                controller.apply_search_result(book)
+            }
+        }
+    }
+
     Connections {
         target: controller
 
@@ -413,6 +428,11 @@ ApplicationWindow {
 
         function onConversion_completed() {
             console.log("Conversion completed")
+        }
+        
+        function onSearch_results_ready(results) {
+            console.log("Search returned", results.length, "results")
+            searchResultsDialog.showResults(results)
         }
     }
 

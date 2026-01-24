@@ -3,8 +3,7 @@ mod models;
 
 use qmetaobject::*;
 use cstr::cstr;
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::path::PathBuf;
 
 #[derive(QObject, Default)]
 struct LecternController {
@@ -44,7 +43,7 @@ struct LecternController {
     save_config: qt_method!(fn(&mut self, host: QString, token: QString, library_id: QString, local_path: QString, template: QString)),
     start_conversion: qt_method!(fn(&mut self)),
     search_metadata: qt_method!(fn(&mut self, query: QString, by_asin: bool)),
-    apply_search_result: qt_method!(fn(&mut self, book: QVariant)),
+    apply_search_result: qt_method!(fn(&mut self, book: QVariantMap)),
 }
 
 impl LecternController {
@@ -53,7 +52,7 @@ impl LecternController {
         self.current_folder = path;
         self.current_folder_changed();
         
-        self.status_message = QString::from("📂 Loaded folder");
+        self.status_message = QString::from(format!("📂 Loaded folder"));
         self.status_message_changed();
         
         self.log_message(QString::from(format!("Folder loaded: {}", path_str)));
@@ -90,17 +89,84 @@ impl LecternController {
         self.log_message(QString::from("Starting conversion process..."));
         
         // TODO: Implement actual conversion logic here
+        // For now, just simulate completion
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            // You would emit signals here to update the UI
+        });
     }
     
-    fn search_metadata(&mut self, _query: QString, _by_asin: bool) {
-        self.status_message = QString::from("🔍 Search not yet implemented");
+    fn search_metadata(&mut self, query: QString, by_asin: bool) {
+        let query_str = query.to_string();
+        
+        self.status_message = QString::from("🔍 Searching...");
         self.status_message_changed();
         
-        self.log_message(QString::from("Search functionality coming soon..."));
+        self.log_message(QString::from(format!("Searching for: {}", query_str)));
+        
+        // Get a pointer to self that can be moved into the thread
+        let ptr = self as *mut LecternController;
+        
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            match rt.block_on(services::AudioService::search_metadata(&query_str, by_asin)) {
+                Ok(results) => {
+                    println!("✓ Search completed: {} results", results.len());
+                    
+                    // Convert BookMetadata to QVariantList
+                    let qml_results: Vec<QVariant> = results.iter().map(|book| {
+                        let mut map = QVariantMap::new();
+                        map.insert("title".into(), QVariant::from(book.title.clone()));
+                        map.insert("authors".into(), QVariant::from(
+                            QVariantList::from_iter(book.authors.iter().map(|a| QVariant::from(a.clone())))
+                        ));
+                        map.insert("image_url".into(), QVariant::from(book.image_url.clone()));
+                        map.insert("asin".into(), QVariant::from(book.asin.clone()));
+                        
+                        if let Some(narrators) = &book.narrator_names {
+                            map.insert("narrator_names".into(), QVariant::from(
+                                QVariantList::from_iter(narrators.iter().map(|n| QVariant::from(n.clone())))
+                            ));
+                        }
+                        if let Some(series) = &book.series_name {
+                            map.insert("series_name".into(), QVariant::from(series.clone()));
+                        }
+                        if let Some(date) = &book.release_date {
+                            map.insert("release_date".into(), QVariant::from(date.clone()));
+                        }
+                        
+                        QVariant::from(map)
+                    }).collect();
+                    
+                    // Emit signal with results
+                    unsafe {
+                        if !ptr.is_null() {
+                            (*ptr).search_results_ready(QVariantList::from_iter(qml_results));
+                            (*ptr).status_message = QString::from(format!("✓ Found {} results", results.len()));
+                            (*ptr).status_message_changed();
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ Search failed: {}", e);
+                    unsafe {
+                        if !ptr.is_null() {
+                            (*ptr).error_occurred(QString::from(format!("Search failed: {}", e)));
+                            (*ptr).status_message = QString::from("❌ Search failed");
+                            (*ptr).status_message_changed();
+                        }
+                    }
+                }
+            }
+        });
     }
     
-    fn apply_search_result(&mut self, _book: QVariant) {
-        self.log_message(QString::from("Metadata applied from search result"));
+    fn apply_search_result(&mut self, book: QVariantMap) {
+        // Extract book data and apply it to the current metadata
+        if let Some(title) = book.get("title") {
+            self.log_message(QString::from(format!("Applied metadata: {}", title.to_qstring().to_string())));
+        }
+        
         self.status_message = QString::from("✓ Metadata applied");
         self.status_message_changed();
         self.metadata_changed();
@@ -115,11 +181,9 @@ fn main() {
     
     let mut engine = QmlEngine::new();
     
-    // Create controller instance  
-    let controller = Rc::new(RefCell::new(LecternController::default()));
-    let controller_ptr = QObjectPinned::new(&*controller.borrow());
-    
-    engine.set_object_property("controller".into(), controller_ptr);
+    // Create controller instance
+    let controller = QObjectBox::new(LecternController::default());
+    engine.set_object_property("controller".into(), controller);
     
     // Load QML
     let qml_path = std::env::current_dir()
@@ -135,7 +199,7 @@ fn main() {
         std::process::exit(1);
     }
     
-    engine.load_file(qml_path.to_string_lossy().to_string().into());
+    engine.load_file(qml_path.into());
     
     println!("Starting Qt event loop...");
     engine.exec();
