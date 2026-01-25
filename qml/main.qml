@@ -540,9 +540,17 @@ ApplicationWindow {
         }
         
         function onSearch_results_ready(results) {
-            console.log("Search returned", results.length, "results")
-            console.log("First result:", JSON.stringify(results[0] || {}))
+            print("========================================")
+            print("[DEBUG] onSearch_results_ready called")
+            print("[DEBUG] Search returned", results.length, "results")
+            print("[DEBUG] First result:", JSON.stringify(results[0] || {}))
+            // CRITICAL: Stop the polling timer immediately to prevent re-rendering
+            searchResultsTimer.running = false
+            print("[DEBUG] Timer stopped")
+            print("[DEBUG] Calling searchResultsDialog.showResults...")
             searchResultsDialog.showResults(results)
+            print("[DEBUG] showResults call completed")
+            print("========================================")
         }
     }
 
@@ -555,6 +563,9 @@ ApplicationWindow {
         onTriggered: {
             if (controller) {
                 var results = controller.check_search_results()
+                if (results && results.length > 0) {
+                    print("[DEBUG] Timer found", results.length, "results via check_search_results")
+                }
                 // Results are automatically emitted via signal in check_search_results
             }
         }

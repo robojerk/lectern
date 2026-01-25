@@ -217,15 +217,20 @@ impl LecternController {
     
     fn check_search_results(&mut self) -> QVariantList {
         // Check for pending results and return them
+        // NOTE: This should only emit once per search, not repeatedly
         let mut pending = self.pending_search_results.lock().unwrap();
         if let Some(results) = pending.take() {
-            // Emit signal with results
+            println!("[DEBUG] check_search_results: Found {} results, emitting signal ONCE", results.len());
+            // Emit signal with results - this should only happen once
             self.search_results_ready(results.clone());
-            results
+            println!("[DEBUG] check_search_results: Signal emitted, returning empty list to prevent re-emission");
+            // Return empty list so timer doesn't keep re-emitting
+            QVariantList::default()
         } else {
             // Check for errors
             let mut pending_err = self.pending_search_error.lock().unwrap();
             if let Some(err) = pending_err.take() {
+                println!("[DEBUG] check_search_results: Found error, emitting error signal");
                 self.error_occurred(err);
             }
             QVariantList::default()
