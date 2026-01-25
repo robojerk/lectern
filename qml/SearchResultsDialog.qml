@@ -1,121 +1,185 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Controls.Material 2.15
 
-Popup {
-    id: searchResultsDialog
-    modal: false  // TEST: Make non-modal to rule out overlay blocking clicks
-    width: 700
-    height: 500
-    x: 100  // Fixed position instead of anchors.centerIn
-    y: 100
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+Item {
+    id: root
+    anchors.fill: parent // Cover the entire window
+    visible: false // Hidden by default
+    z: 9999 // Force it to be the absolute top layer
+
+    // Define the signals exactly as before
+    signal bookSelected(var book)
     
+    property var controller
+
+    // Helper functions to maintain compatibility with your existing code
+    function open() {
+        console.log("[DEBUG] SearchResultsDialog.open() called")
+        visible = true
+        console.log("[DEBUG] Dialog visible set to:", visible)
+    }
+
+    function close() {
+        console.log("[DEBUG] SearchResultsDialog.close() called")
+        visible = false
+    }
+
+    function showResults(results) {
+        console.log("========================================")
+        console.log("[DEBUG] showResults() called - FILE IS BEING USED")
+        console.log("[DEBUG] Results parameter:", results)
+        console.log("[DEBUG] Results length:", results ? results.length : 0)
+        if (results && results.length > 0) {
+            console.log("[DEBUG] First result:", JSON.stringify(results[0]))
+        }
+        
+        // Clear and populate the ListModel
+        resultsModel.clear()
+        for (var i = 0; i < results.length; i++) {
+            var item = results[i]
+            resultsModel.append({
+                title: item.title || "",
+                image_url: item.image_url || "",
+                asin: item.asin || "",
+                authors: item.authors || [],
+                narrator_names: item.narrator_names || [],
+                series_name: item.series_name || "",
+                release_date: item.release_date || ""
+            })
+        }
+        console.log("[DEBUG] ListModel populated with", resultsModel.count, "items")
+        console.log("[DEBUG] Opening dialog...")
+        open()
+        console.log("[DEBUG] Dialog opened, visible:", visible)
+        console.log("========================================")
+    }
+
     Component.onCompleted: {
-        print("[DEBUG] SearchResultsDialog Popup Component.onCompleted")
-        print("[DEBUG] Dialog visible:", visible)
+        console.log("========================================")
+        console.log("[DEBUG] SearchResultsDialog Item Component.onCompleted")
+        console.log("[DEBUG] Dialog visible:", visible)
+        console.log("========================================")
     }
     
     onVisibleChanged: {
-        print("[DEBUG] SearchResultsDialog visibility changed to:", visible)
+        console.log("[DEBUG] SearchResultsDialog visibility changed to:", visible)
+        if (visible) {
+            console.log("[DEBUG] Dialog is now visible - file is being used!")
+        }
     }
-    
-    property var searchResults: []
-    property var controller
-    
-    signal bookSelected(var book)
-    
-    // Test function to verify signal works
-    function testSignal() {
-        print("[DEBUG] testSignal() called")
-        var testBook = {title: "Test Book", authors: ["Test Author"]}
-        bookSelected(testBook)
-        print("[DEBUG] testSignal() emitted signal")
-    }
-    
-    ColumnLayout {
+
+    // 1. The Semi-Transparent Background ("Dimmer")
+    Rectangle {
         anchors.fill: parent
-        spacing: 0
+        color: "#AA000000" // 66% opacity black
+        visible: root.visible
         
-        // Header
-        Rectangle {
-            Layout.fillWidth: true
-            height: 60
-            color: Material.color(Material.Grey, Material.Shade800)
-            
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 16
-                
-                Label {
-                    text: "Search Results"
-                    font.bold: true
-                    font.pixelSize: 18
-                    color: Material.primaryColor
-                }
-                
-                Label {
-                    text: searchResults.length + " found"
-                    opacity: 0.7
-                    font.pixelSize: 14
-                }
-                
-                Item { Layout.fillWidth: true }
-                
-                Button {
-                    text: "✕"
-                    flat: true
-                    onClicked: searchResultsDialog.close()
-                }
+        // This MouseArea blocks clicks from reaching the main app underneath
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onClicked: {
+                console.log("[DEBUG] Background clicked - closing dialog")
+                root.close()
             }
         }
-        
-        // Results list
-        ScrollView {
-            id: resultsScrollView
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
-            ScrollBar.vertical.interactive: true  // Prevent scrollview from stealing clicks
-            
-            ListView {
-                id: resultsListView
-                model: searchResults
-                spacing: 1
-                width: resultsScrollView.width  // Explicit width to match ScrollView
-                focus: true
-                boundsBehavior: Flickable.StopAtBounds  // Prevent bouncing during clicks
-                // CRITICAL: Disable interaction when hovering over buttons to prevent click stealing
-                interactive: true
+    }
+
+    // 2. The Dialog Content Box
+    Rectangle {
+        id: dialogContent
+        width: 800
+        height: 600
+        anchors.centerIn: parent
+        color: Material.color(Material.Grey, Material.Shade800)
+        radius: 8
+        clip: true
+        visible: root.visible
+        z: 1
+
+        // Trap clicks inside the box so they don't close the dialog
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onClicked: {
+                console.log("[DEBUG] Dialog content area clicked (not closing)")
+                // Don't close - let child items handle clicks
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 0
+            spacing: 0
+
+            // Header
+            Rectangle {
+                Layout.fillWidth: true
+                height: 50
+                color: Material.color(Material.Grey, Material.Shade900)
                 
-                delegate: Rectangle {
-                    id: delegateRoot
-                    width: resultsListView ? resultsListView.width : parent.width
-                    height: 120
-                    color: hoverArea.containsMouse ? 
-                           Material.color(Material.Grey, Material.Shade700) : 
-                           Material.color(Material.Grey, Material.Shade800)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 16
                     
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    
-                    // MouseArea for hover effect - MUST be first and non-interactive
-                    MouseArea {
-                        id: hoverArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton  // CRITICAL: Allows clicks to pass through
-                        z: -1  // Behind everything
+                    Label {
+                        text: "Search Results"
+                        font.bold: true
+                        font.pixelSize: 18
+                        color: Material.primaryColor
                     }
                     
-                    RowLayout {
+                    Label {
+                        text: resultsModel.count + " found"
+                        opacity: 0.7
+                        font.pixelSize: 14
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    // Close 'X' button
+                    ToolButton {
+                        text: "✕"
+                        onClicked: {
+                            console.log("[DEBUG] Close button clicked")
+                            root.close()
+                        }
+                    }
+                }
+            }
+
+            // The List
+            ListView {
+                id: resultsListView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                spacing: 2
+                
+                model: ListModel { 
+                    id: resultsModel 
+                }
+
+                // Use ItemDelegate - it handles hovers/clicks natively
+                delegate: ItemDelegate {
+                    width: resultsListView.width
+                    height: 120
+                    
+                    // Highlight on hover
+                    background: Rectangle {
+                        color: parent.hovered ? Material.color(Material.Grey, Material.Shade700) 
+                                              : Material.color(Material.Grey, Material.Shade800)
+                    }
+
+                    contentItem: RowLayout {
                         anchors.fill: parent
                         anchors.margins: 12
                         spacing: 16
-                        z: 1  // Above hoverArea
                         
-                        // Cover image
+                        // Cover Image
                         Rectangle {
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 100
@@ -124,7 +188,7 @@ Popup {
                             
                             Image {
                                 anchors.fill: parent
-                                source: modelData.image_url || ""
+                                source: model.image_url || ""
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                                 
@@ -142,179 +206,152 @@ Popup {
                                 }
                             }
                         }
-                        
-                        // Book info
+
+                        // Text Info
                         ColumnLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             spacing: 6
                             
                             Label {
-                                text: modelData.title || "Unknown Title"
+                                text: model.title || "Unknown Title"
                                 font.bold: true
                                 font.pixelSize: 16
-                                Layout.fillWidth: true
                                 elide: Text.ElideRight
                                 maximumLineCount: 2
                                 wrapMode: Text.Wrap
+                                Layout.fillWidth: true
                             }
                             
                             Label {
-                                text: "by " + (modelData.authors ? modelData.authors.join(", ") : "Unknown")
+                                text: "by " + (model.authors ? (Array.isArray(model.authors) ? model.authors.join(", ") : model.authors) : "Unknown")
                                 font.pixelSize: 14
                                 opacity: 0.8
-                                Layout.fillWidth: true
                                 elide: Text.ElideRight
+                                Layout.fillWidth: true
                             }
                             
                             RowLayout {
                                 spacing: 12
-                                visible: !!(modelData.narrator_names && modelData.narrator_names.length > 0) || 
-                                         !!(modelData.series_name) || 
-                                         !!(modelData.release_date)
+                                visible: !!(model.narrator_names && model.narrator_names.length > 0) || 
+                                         !!(model.series_name) || 
+                                         !!(model.release_date)
                                 
                                 Label {
-                                    text: modelData.narrator_names ? 
-                                          "🎙️ " + modelData.narrator_names.join(", ") : ""
+                                    text: model.narrator_names ? 
+                                          "🎙️ " + (Array.isArray(model.narrator_names) ? model.narrator_names.join(", ") : model.narrator_names) : ""
                                     font.pixelSize: 12
                                     opacity: 0.7
-                                    visible: !!(modelData.narrator_names && modelData.narrator_names.length > 0)
+                                    visible: !!(model.narrator_names && model.narrator_names.length > 0)
                                     Layout.maximumWidth: 200
                                     elide: Text.ElideRight
                                 }
                                 
                                 Label {
-                                    text: modelData.series_name ? 
-                                          "📖 " + modelData.series_name : ""
+                                    text: model.series_name ? 
+                                          "📖 " + model.series_name : ""
                                     font.pixelSize: 12
                                     opacity: 0.7
-                                    visible: !!(modelData.series_name)
+                                    visible: !!(model.series_name)
                                     Layout.maximumWidth: 150
                                     elide: Text.ElideRight
                                 }
                                 
                                 Label {
-                                    text: modelData.release_date ? 
-                                          "📅 " + modelData.release_date : ""
+                                    text: model.release_date ? 
+                                          "📅 " + model.release_date : ""
                                     font.pixelSize: 12
                                     opacity: 0.7
-                                    visible: !!(modelData.release_date)
+                                    visible: !!(model.release_date)
                                 }
                             }
                             
                             Item { Layout.fillHeight: true }
                             
                             Label {
-                                text: modelData.asin ? "ASIN: " + modelData.asin : ""
+                                text: model.asin ? "ASIN: " + model.asin : ""
                                 font.pixelSize: 11
                                 opacity: 0.5
-                                visible: modelData.asin
+                                visible: model.asin
                             }
                         }
-                        
-                        // Select button - Using MouseArea to bypass Button-specific issues
-                        Rectangle {
+
+                        // THE BUTTON
+                        Button {
                             id: useThisButton
-                            width: 100
-                            height: 40
-                            color: "purple"
-                            z: 999
+                            text: "Use This"
+                            highlighted: true
+                            Material.accent: Material.DeepPurple
+                            Layout.alignment: Qt.AlignVCenter
                             
-                            Text {
-                                anchors.centerIn: parent
-                                text: "SELECT"
-                                color: "white"
-                                font.bold: true
-                            }
-                            
-                            MouseArea {
-                                anchors.fill: parent
-                                onPressed: {
-                                    print("CRITICAL: MOUSEAREA PRESSED for:", modelData ? modelData.title : "null")
+                            onClicked: {
+                                console.log("========================================")
+                                console.log("!!! BUTTON CLICKED: " + (model.title || "Unknown"))
+                                
+                                // CRITICAL: Create a clean JavaScript object to avoid segfault
+                                // Extract data from the model into a plain object
+                                var cleanBook = {
+                                    "title": model.title || "",
+                                    "authors": model.authors || [],
+                                    "narrator_names": model.narrator_names || [],
+                                    "series_name": model.series_name || "",
+                                    "image_url": model.image_url || "",
+                                    "asin": model.asin || "",
+                                    "release_date": model.release_date || ""
                                 }
-                                onClicked: {
-                                    print("CRITICAL: MOUSEAREA CLICKED for:", modelData ? modelData.title : "null")
-                                    print("[DEBUG] About to emit bookSelected signal...")
-                                    try {
-                                        searchResultsDialog.bookSelected(modelData)
-                                        print("[DEBUG] Signal emitted successfully")
-                                    } catch(err) {
-                                        print("[DEBUG] ERROR emitting signal:", err, err.toString())
-                                    }
-                                    print("[DEBUG] About to close dialog...")
-                                    try {
-                                        searchResultsDialog.close()
-                                        print("[DEBUG] Dialog close called")
-                                    } catch(err) {
-                                        print("[DEBUG] ERROR closing dialog:", err)
-                                    }
+                                
+                                console.log("[DEBUG] Clean book object:", JSON.stringify(cleanBook))
+                                console.log("[DEBUG] About to emit bookSelected signal...")
+                                try {
+                                    root.bookSelected(cleanBook)
+                                    console.log("[DEBUG] Signal emitted successfully")
+                                } catch(err) {
+                                    console.log("[DEBUG] ERROR emitting signal:", err)
                                 }
+                                console.log("[DEBUG] About to close dialog...")
+                                root.close()
+                                console.log("[DEBUG] Dialog close called")
+                                console.log("========================================")
                             }
                         }
                     }
                     
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        width: parent.width
-                        height: 1
-                        color: Material.color(Material.Grey, Material.Shade700)
-                        z: 1
+                    // Allow clicking the whole row as well
+                    onClicked: {
+                        console.log("!!! ROW CLICKED: " + (model.title || "Unknown"))
+                        
+                        // CRITICAL: Create a clean JavaScript object to avoid segfault
+                        var cleanBook = {
+                            "title": model.title || "",
+                            "authors": model.authors || [],
+                            "narrator_names": model.narrator_names || [],
+                            "series_name": model.series_name || "",
+                            "image_url": model.image_url || "",
+                            "asin": model.asin || "",
+                            "release_date": model.release_date || ""
+                        }
+                        
+                        root.bookSelected(cleanBook)
+                        root.close()
                     }
                 }
             }
-        }
-        
-        // Footer
-        Rectangle {
-            Layout.fillWidth: true
-            height: 50
-            color: Material.color(Material.Grey, Material.Shade800)
             
-            RowLayout {
-                anchors.centerIn: parent
-                spacing: 16
+            // Footer
+            Rectangle {
+                Layout.fillWidth: true
+                height: 50
+                color: Material.color(Material.Grey, Material.Shade800)
                 
                 Button {
+                    anchors.centerIn: parent
                     text: "Close"
-                    onClicked: searchResultsDialog.close()
+                    onClicked: {
+                        console.log("[DEBUG] Footer close button clicked")
+                        root.close()
+                    }
                 }
             }
-        }
-    }
-    
-    function showResults(results) {
-        print("========================================")
-        print("[DEBUG] showResults() called")
-        print("[DEBUG] Results parameter:", results)
-        print("[DEBUG] Results length:", results ? results.length : 0)
-        if (results && results.length > 0) {
-            print("[DEBUG] First result:", JSON.stringify(results[0]))
-        }
-        searchResults = results
-        print("[DEBUG] searchResults property set to:", searchResults)
-        print("[DEBUG] searchResults.length:", searchResults ? searchResults.length : 0)
-        print("[DEBUG] Opening dialog...")
-        open()
-        print("[DEBUG] Dialog opened, visible:", visible)
-        print("[DEBUG] Dialog width:", width, "height:", height)
-        print("========================================")
-    }
-    
-    // Global MouseArea to test if dialog receives clicks at all
-    // Place it at z: -1 so it doesn't block, but still detects clicks
-    MouseArea {
-        anchors.fill: parent
-        z: -1
-        enabled: true
-        acceptedButtons: Qt.AllButtons
-        propagateComposedEvents: true
-        onPressed: function(mouse) {
-            print("!!! GLOBAL DIALOG CLICK AT: " + mouse.x + "," + mouse.y + " (accepted: false)")
-            mouse.accepted = false  // Let it pass through to children
-        }
-        onClicked: function(mouse) {
-            print("!!! GLOBAL DIALOG CLICKED AT: " + mouse.x + "," + mouse.y + " (accepted: false)")
-            mouse.accepted = false
         }
     }
 }

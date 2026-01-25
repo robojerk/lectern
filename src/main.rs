@@ -220,10 +220,20 @@ impl LecternController {
         // NOTE: This should only emit once per search, not repeatedly
         let mut pending = self.pending_search_results.lock().unwrap();
         if let Some(results) = pending.take() {
-            println!("[DEBUG] check_search_results: Found {} results, emitting signal ONCE", results.len());
-            // Emit signal with results - this should only happen once
+            println!("[DEBUG] check_search_results: Found {} results", results.len());
+            println!("[DEBUG] About to emit signal with {} items", results.len());
+            
+            // Validate the results before emitting
+            if results.len() > 0 {
+                println!("[DEBUG] Results contain {} items, validating...", results.len());
+            }
+            
+            println!("[DEBUG] Emitting signal now...");
+            // Emit signal with results - we're already on Qt thread (qt_method!)
             self.search_results_ready(results.clone());
-            println!("[DEBUG] check_search_results: Signal emitted, returning empty list to prevent re-emission");
+            println!("[DEBUG] Signal emitted successfully");
+            
+            println!("[DEBUG] check_search_results: Returning empty list to prevent re-emission");
             // Return empty list so timer doesn't keep re-emitting
             QVariantList::default()
         } else {

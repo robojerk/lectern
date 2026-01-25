@@ -540,17 +540,36 @@ ApplicationWindow {
         }
         
         function onSearch_results_ready(results) {
-            print("========================================")
-            print("[DEBUG] onSearch_results_ready called")
-            print("[DEBUG] Search returned", results.length, "results")
-            print("[DEBUG] First result:", JSON.stringify(results[0] || {}))
-            // CRITICAL: Stop the polling timer immediately to prevent re-rendering
-            searchResultsTimer.running = false
-            print("[DEBUG] Timer stopped")
-            print("[DEBUG] Calling searchResultsDialog.showResults...")
-            searchResultsDialog.showResults(results)
-            print("[DEBUG] showResults call completed")
-            print("========================================")
+            try {
+                console.log("========================================")
+                console.log("[DEBUG] onSearch_results_ready called")
+                console.log("[DEBUG] Results parameter type:", typeof results)
+                console.log("[DEBUG] Results is array:", Array.isArray(results))
+                console.log("[DEBUG] Results length:", results ? results.length : "null")
+                
+                if (!results || results.length === 0) {
+                    console.log("[DEBUG] No results to display")
+                    return
+                }
+                
+                console.log("[DEBUG] First result type:", typeof results[0])
+                try {
+                    console.log("[DEBUG] First result:", JSON.stringify(results[0] || {}))
+                } catch(e) {
+                    console.log("[DEBUG] Could not stringify first result:", e)
+                }
+                
+                // CRITICAL: Stop the polling timer immediately to prevent re-rendering
+                searchResultsTimer.running = false
+                console.log("[DEBUG] Timer stopped")
+                console.log("[DEBUG] Calling searchResultsDialog.showResults...")
+                searchResultsDialog.showResults(results)
+                console.log("[DEBUG] showResults call completed")
+                console.log("========================================")
+            } catch(err) {
+                console.log("[DEBUG] ERROR in onSearch_results_ready:", err, err.toString())
+                console.log("[DEBUG] Error stack:", err.stack)
+            }
         }
     }
 
