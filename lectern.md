@@ -2,11 +2,11 @@
 
 An app to manage individual audiobooks.
 
-Once app is opened, user can drag audiobook onto app, or click on a button to open xdg portal (File chooser).
+Once app is opened, user can drag audiobook onto app, or click on a button to open xdg portal (File chooser) and select a dir or file as an audiobook.
 
-Audio books come in a dir with many mp3's, aac, wav, flac etc.  or as m4b files
+Audio books can come in a dir with many mp3's, aac, wav, flac etc.  Or as a single m4b file
 
-Once audiobook is selected/chosen in the app. User can edit the metadata manully, or search a providor for metadata then edit it.  Chnage cover, add/edit chapters
+Once audiobook is selected/chosen in the app. User can edit the metadata manully, or use search a provider to grab and populate metadata, then user can edit it.  Change cover, add/edit chapters
 
 Then save it all as a m4b file with everything included in one file.
 
@@ -22,7 +22,8 @@ Open Library
 FantLab.ru
 audible.ca
 
-Example of possible metadata fields to be filled out by search, or audible.
+Example of metadata fields that can be populated manually or by a provider.
+```
 Title
 Subtitle
 Author(s)
@@ -38,12 +39,11 @@ Publisher
 Language
 Explicit (yes/no)
 Abridged (yes/no)
-
-See image [meta-data-form.jpg](./plan/meta-data-form.jpg)
+```
 
 ## Cover (optional)
 
-User can manually choose a book cover, or use a providor.
+User can manually choose a book cover, or use a providor. If there is a cover in the dir with the sound files, or in the m4b show that. 
 
 Search,download and choose cover art from provider(s)
 audible.com
@@ -75,13 +75,13 @@ Allow user to edit chapters manually, even after looking up from provider. Like 
 User can do the following
 
 Add, edit, remove chapters
+
 Editing chapters includes editing chapter title. and the start timestamp of the chapter.
-Global shift times of all chapters
+User can globally shift start times of all chapters, unless user locks them.
 lock chpters (this makes chapter non editable from all actions including global time shift)
 shift times of individual chapters by -1 or +1, or just edit the start time.
 Play the chapter. So user knows the mapping is correct.
 
-See image [chapters.jpg](./plan/chapter-edit.png)
 The icons to the right of the title fields in the image.
 From left to right "Lock Chapter" "Remove Chapter" "Insert Chapter Below" "Play Chapter"
 
@@ -143,16 +143,6 @@ Cover (Manually upload or choose cover using search providor)
 Chapters (Manually edit or match to providor)
 Match (search providor to get metadata)
 Convert (click to start conversion)
+Settings
 
 ## Progress
-
-The core functionality of Lectern is now implemented, featuring a tabbed interface for organizing the audiobook creation workflow.
-
-- [x] **UI Tabs**: Implemented Metadata, Cover, Chapters, and Convert tabs with provider selection.
-- [x] **Metadata**: Multi-provider search (Audnexus, Google Books, Open Library) with automatic folder parsing.
-- [x] **Cover Art**: Search and download cover art from Audible, Google Books, Open Library with provider selection.
-- [x] **Chapters**: Auto-detection from filenames, manual editing, locking, and time shift controls.
-- [x] **Conversion**: M4B generation using FFmpeg with embedded chapters and tags.
-- [x] **Publishing**: Direct upload to Audiobookshelf with library scan trigger.
-- [x] **Local Library**: Path templating system with {Author}, {Series}, {Title}, etc. placeholders.
-

@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# QML/Qt bindings
-qmetaobject = "0.2"
-cstr = "0.2"
+# Pure Rust GUI
+iced = { version = "0.12", features = ["image"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -23,6 +22,8 @@ anyhow = "1.0"
 
 # File system
 dirs = "5.0"
+rfd = "0.14"
+futures = "0.3"
 
 # Text processing
 regex = "1.10"
@@ -34,6 +35,5 @@ url = "2.5"
 # Audio processing (if needed)
 # ffmpeg-next = "6.0"  # Uncomment if using FFmpeg bindings
 
-[build-dependencies]
-# Required for qmetaobject
-qmetaobject = "0.2"
+# Image handling
+image = "0.25"

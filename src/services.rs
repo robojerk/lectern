@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BookMetadata {
     pub title: String,
+    pub subtitle: Option<String>,
     pub author: String,
     pub isbn: Option<String>,
     pub asin: Option<String>,
@@ -15,12 +16,20 @@ pub struct BookMetadata {
     pub narrator: Option<String>,
     pub publisher: Option<String>,
     pub publish_year: Option<String>,
+    pub series: Option<String>,
+    pub series_number: Option<String>,
+    pub genre: Option<String>,
+    pub tags: Option<String>, // Comma-separated tags
+    pub language: Option<String>,
+    pub explicit: Option<bool>,
+    pub abridged: Option<bool>,
 }
 
 impl Default for BookMetadata {
     fn default() -> Self {
         BookMetadata {
             title: String::new(),
+            subtitle: None,
             author: String::new(),
             isbn: None,
             asin: None,
@@ -30,6 +39,13 @@ impl Default for BookMetadata {
             narrator: None,
             publisher: None,
             publish_year: None,
+            series: None,
+            series_number: None,
+            genre: None,
+            tags: None,
+            language: None,
+            explicit: None,
+            abridged: None,
         }
     }
 }
@@ -49,6 +65,7 @@ impl AudioService {
         // Return mock data
         Ok(BookMetadata {
             title: format!("Book Title for {}", query),
+            subtitle: None,
             author: "Sample Author".to_string(),
             isbn: Some("1234567890".to_string()),
             asin: Some("B012345678".to_string()),
@@ -58,6 +75,13 @@ impl AudioService {
             narrator: Some("Sample Narrator".to_string()),
             publisher: Some("Sample Publisher".to_string()),
             publish_year: Some("2023".to_string()),
+            series: None,
+            series_number: None,
+            genre: None,
+            tags: None,
+            language: None,
+            explicit: None,
+            abridged: None,
         })
     }
     
@@ -197,6 +221,7 @@ impl AudioService {
         
         Some(BookMetadata {
             title,
+            subtitle: None,
             author,
             isbn,
             asin,
@@ -206,55 +231,126 @@ impl AudioService {
             narrator: if narrator.is_empty() { None } else { Some(narrator) },
             publisher,
             publish_year,
+            series: None,
+            series_number: None,
+            genre: None,
+            tags: None,
+            language: None,
+            explicit: None,
+            abridged: None,
         })
     }
     
     // Search by title/author query
     async fn search_by_query(query: &str) -> Result<Vec<BookMetadata>, String> {
+        println!("[DEBUG] search_by_query called with: '{}'", query);
+        
+        let mut results = Vec::new();
+        
         // Try Open Library first
-        if let Ok(results) = Self::search_open_library(query).await {
-            if !results.is_empty() {
-                return Ok(results);
+        match Self::search_open_library(query).await {
+            Ok(mut open_lib_results) if !open_lib_results.is_empty() => {
+                println!("[DEBUG] Open Library returned {} results", open_lib_results.len());
+                // Try to enrich with ASIN from Audnexus if we have ISBN
+                for book in &mut open_lib_results {
+                    if book.asin.is_none() && book.isbn.is_some() {
+                        if let Ok(asin_result) = Self::search_audnexus_by_isbn(book.isbn.as_ref().unwrap()).await {
+                            if let Some(enriched_book) = asin_result.first() {
+                                if enriched_book.asin.is_some() {
+                                    book.asin = enriched_book.asin.clone();
+                                    println!("[DEBUG] Enriched book '{}' with ASIN: {:?}", book.title, book.asin);
+                                }
+                            }
+                        }
+                    }
+                }
+                results = open_lib_results;
+            },
+            Ok(_) => println!("[DEBUG] Open Library returned empty results"),
+            Err(e) => println!("[DEBUG] Open Library error: {}", e),
+        }
+        
+        // If no results, try Google Books as fallback
+        if results.is_empty() {
+            match Self::search_google_books(query).await {
+                Ok(mut google_results) if !google_results.is_empty() => {
+                    println!("[DEBUG] Google Books returned {} results", google_results.len());
+                    // Try to enrich with ASIN from Audnexus if we have ISBN
+                    for book in &mut google_results {
+                        if book.asin.is_none() && book.isbn.is_some() {
+                            if let Ok(asin_result) = Self::search_audnexus_by_isbn(book.isbn.as_ref().unwrap()).await {
+                                if let Some(enriched_book) = asin_result.first() {
+                                    if enriched_book.asin.is_some() {
+                                        book.asin = enriched_book.asin.clone();
+                                        println!("[DEBUG] Enriched book '{}' with ASIN: {:?}", book.title, book.asin);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    results = google_results;
+                },
+                Ok(_) => println!("[DEBUG] Google Books returned empty results"),
+                Err(e) => println!("[DEBUG] Google Books error: {}", e),
             }
         }
         
-        // Try Google Books as fallback
-        if let Ok(results) = Self::search_google_books(query).await {
-            if !results.is_empty() {
-                return Ok(results);
-            }
+        if results.is_empty() {
+            println!("[DEBUG] No results found from any provider for: '{}'", query);
+            Err(format!("No results found for query: {}", query))
+        } else {
+            Ok(results)
         }
-        
-        Err(format!("No results found for query: {}", query))
+    }
+    
+    // Search Audnexus by ISBN to get ASIN
+    async fn search_audnexus_by_isbn(isbn: &str) -> Result<Vec<BookMetadata>, String> {
+        // Audnexus doesn't have a direct ISBN endpoint, but we can try searching by ISBN
+        // For now, return empty - this would need a different approach
+        Ok(Vec::new())
     }
     
     // Search Open Library API
     async fn search_open_library(query: &str) -> Result<Vec<BookMetadata>, String> {
+        println!("[DEBUG] Searching Open Library for: {}", query);
         let client = reqwest::Client::new();
         let url = format!("https://openlibrary.org/search.json?q={}&limit=10", 
                          urlencoding::encode(query));
+        println!("[DEBUG] Open Library URL: {}", url);
         
         let response = client.get(&url)
             .send()
             .await
-            .map_err(|e| format!("Open Library request failed: {}", e))?;
+            .map_err(|e| {
+                println!("[DEBUG] Open Library request error: {}", e);
+                format!("Open Library request failed: {}", e)
+            })?;
+        
+        println!("[DEBUG] Open Library response status: {}", response.status());
         
         if !response.status().is_success() {
             return Err(format!("Open Library returned status: {}", response.status()));
         }
         
         let json: serde_json::Value = response.json().await
-            .map_err(|e| format!("Failed to parse Open Library response: {}", e))?;
+            .map_err(|e| {
+                println!("[DEBUG] Open Library parse error: {}", e);
+                format!("Failed to parse Open Library response: {}", e)
+            })?;
         
         let mut results = Vec::new();
         if let Some(docs) = json.get("docs").and_then(|d| d.as_array()) {
+            println!("[DEBUG] Open Library found {} documents", docs.len());
             for doc in docs.iter().take(10) {
                 if let Some(metadata) = Self::parse_open_library_doc(doc) {
                     results.push(metadata);
                 }
             }
+        } else {
+            println!("[DEBUG] Open Library: No 'docs' array in response");
         }
         
+        println!("[DEBUG] Open Library returning {} results", results.len());
         Ok(results)
     }
     
@@ -346,6 +442,7 @@ impl AudioService {
         
         Some(BookMetadata {
             title,
+            subtitle: None,
             author,
             isbn,
             asin: None, // Open Library doesn't provide ASIN
@@ -355,36 +452,57 @@ impl AudioService {
             narrator: None,
             publisher,
             publish_year,
+            series: None,
+            series_number: None,
+            genre: None,
+            tags: None,
+            language: None,
+            explicit: None,
+            abridged: None,
         })
     }
     
     // Search Google Books API
     async fn search_google_books(query: &str) -> Result<Vec<BookMetadata>, String> {
+        println!("[DEBUG] Searching Google Books for: {}", query);
         let client = reqwest::Client::new();
         let url = format!("https://www.googleapis.com/books/v1/volumes?q={}&maxResults=10", 
                          urlencoding::encode(query));
+        println!("[DEBUG] Google Books URL: {}", url);
         
         let response = client.get(&url)
             .send()
             .await
-            .map_err(|e| format!("Google Books request failed: {}", e))?;
+            .map_err(|e| {
+                println!("[DEBUG] Google Books request error: {}", e);
+                format!("Google Books request failed: {}", e)
+            })?;
+        
+        println!("[DEBUG] Google Books response status: {}", response.status());
         
         if !response.status().is_success() {
             return Err(format!("Google Books returned status: {}", response.status()));
         }
         
         let json: serde_json::Value = response.json().await
-            .map_err(|e| format!("Failed to parse Google Books response: {}", e))?;
+            .map_err(|e| {
+                println!("[DEBUG] Google Books parse error: {}", e);
+                format!("Failed to parse Google Books response: {}", e)
+            })?;
         
         let mut results = Vec::new();
         if let Some(items) = json.get("items").and_then(|i| i.as_array()) {
+            println!("[DEBUG] Google Books found {} items", items.len());
             for item in items.iter().take(10) {
                 if let Some(metadata) = Self::parse_google_books_item(item) {
                     results.push(metadata);
                 }
             }
+        } else {
+            println!("[DEBUG] Google Books: No 'items' array in response");
         }
         
+        println!("[DEBUG] Google Books returning {} results", results.len());
         Ok(results)
     }
     
@@ -450,6 +568,7 @@ impl AudioService {
         
         Some(BookMetadata {
             title,
+            subtitle: None,
             author,
             isbn,
             asin: None, // Google Books doesn't provide ASIN
@@ -459,6 +578,13 @@ impl AudioService {
             narrator: None,
             publisher,
             publish_year,
+            series: None,
+            series_number: None,
+            genre: None,
+            tags: None,
+            language: None,
+            explicit: None,
+            abridged: None,
         })
     }
     
@@ -490,6 +616,65 @@ impl AudioService {
         println!("Scanning library {} at {}", library_id, host);
         Ok(())
     }
+    
+    // Fetch chapters from Audnexus by ASIN
+    pub async fn fetch_chapters_by_asin(asin: &str) -> Result<Vec<crate::models::Chapter>, String> {
+        
+        let client = reqwest::Client::new();
+        let url = format!("https://api.audnex.us/books/{}/chapters", urlencoding::encode(asin));
+        
+        println!("[DEBUG] Fetching chapters from Audnexus: {}", url);
+        
+        let response = client.get(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .map_err(|e| format!("Audnexus chapters request failed: {}", e))?;
+        
+        if !response.status().is_success() {
+            if response.status() == 404 {
+                return Err("No chapters found for this ASIN".to_string());
+            }
+            return Err(format!("Audnexus returned status: {}", response.status()));
+        }
+        
+        let json: serde_json::Value = response.json().await
+            .map_err(|e| format!("Failed to parse Audnexus chapters response: {}", e))?;
+        
+        // Audnexus returns chapters in a "chapters" array
+        let chapters_array = json.get("chapters")
+            .and_then(|c| c.as_array())
+            .ok_or_else(|| "No chapters array in response".to_string())?;
+        
+        let mut chapters = Vec::new();
+        for (index, chapter_json) in chapters_array.iter().enumerate() {
+            // Audnexus chapter format: { "asin": "...", "brandIntroDurationMs": 0, "brandOutroDurationMs": 0, "isAccurate": true, "runtimeLengthMs": 1234567, "runtimeLengthSec": 1234, "chapters": [...] }
+            // Each chapter has: "lengthMs", "startOffsetMs", "startOffsetSec", "title"
+            
+            let title = chapter_json.get("title")
+                .and_then(|t| t.as_str())
+                .unwrap_or(&format!("Chapter {}", index + 1))
+                .to_string();
+            
+            let start_time_ms = chapter_json.get("startOffsetMs")
+                .and_then(|s| s.as_u64())
+                .unwrap_or(0);
+            
+            let duration_ms = chapter_json.get("lengthMs")
+                .and_then(|d| d.as_u64())
+                .unwrap_or(0);
+            
+            chapters.push(crate::models::Chapter {
+                title,
+                start_time: start_time_ms,
+                duration: duration_ms,
+                is_locked: false,
+            });
+        }
+        
+        println!("[DEBUG] Parsed {} chapters from Audnexus", chapters.len());
+        Ok(chapters)
+    }
 }
 
 // Add a helper function to get metadata from a file
@@ -498,6 +683,7 @@ pub async fn get_file_metadata(file_path: &str) -> Result<BookMetadata, String> 
     // For now, return mock data
     Ok(BookMetadata {
         title: format!("Audio File: {}", file_path),
+        subtitle: None,
         author: "Unknown Author".to_string(),
         isbn: None,
         asin: None,
@@ -507,5 +693,12 @@ pub async fn get_file_metadata(file_path: &str) -> Result<BookMetadata, String> 
         narrator: None,
         publisher: None,
         publish_year: None,
+        series: None,
+        series_number: None,
+        genre: None,
+        tags: None,
+        language: None,
+        explicit: None,
+        abridged: None,
     })
 }
