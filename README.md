@@ -174,6 +174,14 @@ sudo cp lectern.desktop /usr/share/applications/
 
 MIT License - Feel free to use and modify as needed.
 
+### Third-Party Licenses
+
+**Material Symbols Icons** (in `assets/png/`):
+- Licensed under Apache License 2.0
+- Copyright 2024 Google LLC
+- Source: https://fonts.google.com/icons
+- See `assets/png/license` for full license text
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.

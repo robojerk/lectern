@@ -141,8 +141,5 @@ I want to add tabs so the window is not so congested
 Details (Metadata)
 Cover (Manually upload or choose cover using search providor)
 Chapters (Manually edit or match to providor)
-Match (search providor to get metadata)
 Convert (click to start conversion)
 Settings
-
-## Progress
