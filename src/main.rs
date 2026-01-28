@@ -1,6 +1,7 @@
 mod services;
 mod models;
 mod ui;
+mod utils;
 
 use ui::Lectern;
 use iced::{Application, Settings, window};

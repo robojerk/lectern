@@ -76,7 +76,7 @@ pub fn download_images_parallel_threaded(urls: Vec<String>) -> std::thread::Join
 pub async fn search_cover_art(
     title: &str,
     author: &str,
-    isbn: Option<&str>,
+    _isbn: Option<&str>,
     asin: Option<&str>,
 ) -> Result<Vec<CoverResult>, String> {
     let mut results = Vec::new();

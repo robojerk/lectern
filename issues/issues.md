@@ -10,13 +10,15 @@ See [lectern_iced prompt](../lectern_iced.md)
 - ✅ Cover images in search results (with placeholders while loading)
 - ✅ Cover image caching (in-memory) to avoid re-downloading
 - ✅ Metadata fields: All fields now populated from search providers
+- ✅ Settings tab implemented (was already present, just needed verification)
+- ✅ Tab alignment fixed - tabs no longer shift vertically on Cover and Chapters tabs
+- ✅ Chapter start time validation - ensures start time >= previous chapter start time
+- ✅ Adjust chapter start time from playback timer - click time display during playback to set to current position
 
 ## Remaining Issues
 
-- Settings tab is missing
 - Cover image downloads still cause UI freezing (needs further optimization)
-- tab alignment is wonky. Meaning the tabs shift vertically down on the "Cover" and "Chapter" tabs 
-- The "Search" button for book metadata does not need to be viewable on all tabs
+- The "Search" button for book metadata does not need to be viewable on all tabs (Note: Already implemented - only shows on Metadata tab)
 - cover tab needs to be more efficient with space. Can only view search results if app is maximized to take up whole screen
 - convert work is all stub code I believe at the moment.
 

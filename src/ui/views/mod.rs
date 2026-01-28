@@ -22,96 +22,120 @@ pub enum ViewMode {
 
 
 pub trait LecternView {
-    fn view_tab_bar(&self) -> Element<Message>;
-    fn view_header(&self) -> Element<Message>;
+    fn view_tab_bar(&self) -> Element<'_, Message>;
+    fn view_header(&self) -> Element<'_, Message>;
 }
 
 impl LecternView for Lectern {
-    fn view_tab_bar(&self) -> Element<Message> {
-        let mut tab_row = row![
-            button("📁 Metadata")
+    fn view_tab_bar(&self) -> Element<'_, Message> {
+        let tab_row = row![
+            button("Metadata")
                 .style(if self.view_mode == ViewMode::Metadata {
                     iced::theme::Button::Primary
                 } else {
                     iced::theme::Button::Secondary
                 })
                 .on_press(Message::SwitchToMetadata)
-                .padding([8, 15]),
-            button("🖼️ Cover")
+                .padding([10, 20]),
+            button("Cover")
                 .style(if self.view_mode == ViewMode::Cover {
                     iced::theme::Button::Primary
                 } else {
                     iced::theme::Button::Secondary
                 })
                 .on_press(Message::SwitchToCover)
-                .padding([8, 15]),
-            button("📑 Chapters")
+                .padding([10, 20]),
+            button("Chapters")
                 .style(if self.view_mode == ViewMode::Chapters {
                     iced::theme::Button::Primary
                 } else {
                     iced::theme::Button::Secondary
                 })
                 .on_press(Message::SwitchToChapters)
-                .padding([8, 15]),
-            button("🔄 Convert")
+                .padding([10, 20]),
+            button("Convert")
                 .style(if self.view_mode == ViewMode::Convert {
                     iced::theme::Button::Primary
                 } else {
                     iced::theme::Button::Secondary
                 })
                 .on_press(Message::SwitchToConvert)
-                .padding([8, 15]),
-            button("⚙️ Settings")
+                .padding([10, 20]),
+            button("Settings")
                 .style(if self.view_mode == ViewMode::Settings {
                     iced::theme::Button::Primary
                 } else {
                     iced::theme::Button::Secondary
                 })
                 .on_press(Message::SwitchToSettings)
-                .padding([8, 15]),
+                .padding([10, 20]),
         ]
-        .spacing(8)
+        .spacing(10)
         .align_items(Alignment::Center);
+        
+        let mut final_row = row![tab_row];
         
         // Only show Search button on Metadata tab
         if self.view_mode == ViewMode::Metadata {
-            tab_row = tab_row.push(Space::with_width(Length::Fill));
-            tab_row = tab_row.push(
-                button("🔍 Search")
+            final_row = final_row.push(Space::with_width(Length::Fill));
+            final_row = final_row.push(
+                button("Search Metadata")
                     .on_press(Message::SwitchToSearch)
                     .style(iced::theme::Button::Secondary)
-                    .padding([8, 15])
+                    .padding([10, 20])
             );
         }
         
-        tab_row.into()
+        container(final_row.width(Length::Fill))
+            .padding([0, 0, 10, 0])
+            .into()
     }
     
-    fn view_header(&self) -> Element<Message> {
+    fn view_header(&self) -> Element<'_, Message> {
         container(
             row![
-                text("🎵 Lectern")
-                    .size(26)
-                    .style(iced::theme::Text::Color(colors::PRIMARY))
-                    .font(iced::Font::MONOSPACE),
+                iced::widget::column![
+                    text("LECTERN")
+                        .size(24)
+                        .style(iced::theme::Text::Color(colors::PRIMARY))
+                        .font(iced::Font::with_name("sans-serif")),
+                    text("Audiobook Management Tool")
+                        .size(10)
+                        .style(iced::theme::Text::Color(colors::TEXT_TERTIARY)),
+                ]
+                .spacing(2),
                 Space::with_width(Length::Fill),
                 container(
-                    text(if self.selected_book.is_some() {
-                        "Editing book"
-                    } else {
-                        "No book selected"
-                    })
-                    .size(14)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
+                    row![
+                        text(if self.metadata.selected_book.is_some() {
+                            "●"
+                        } else {
+                            "○"
+                        })
+                        .size(10)
+                        .style(iced::theme::Text::Color(if self.metadata.selected_book.is_some() {
+                            colors::SUCCESS
+                        } else {
+                            colors::TEXT_TERTIARY
+                        })),
+                        Space::with_width(Length::Fixed(8.0)),
+                        text(if self.metadata.selected_book.is_some() {
+                            format!("Editing: {}", self.metadata.editing_title)
+                        } else {
+                            "No book selected".to_string()
+                        })
+                        .size(13)
+                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
+                    ]
+                    .align_items(Alignment::Center)
                 )
-                .padding([6, 12])
+                .padding([8, 16])
                 .style(iced::theme::Container::Box),
             ]
             .align_items(Alignment::Center)
-            .spacing(20),
         )
-        .padding([20, 25])
-        .style(iced::theme::Container::Box)
+        .width(Length::Fill)
+        .padding([10, 0, 20, 0])
         .into()
     }
 }

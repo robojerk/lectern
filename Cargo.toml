@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # Pure Rust GUI
-iced = { version = "0.12", features = ["image"] }
+iced = { version = "0.12", features = ["image", "tokio"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -37,3 +37,6 @@ url = "2.5"
 
 # Image handling
 image = "0.25"
+
+# Temporary file management
+tempfile = "3.10"

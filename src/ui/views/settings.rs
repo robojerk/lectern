@@ -1,22 +1,22 @@
 use crate::ui::{Message, Lectern};
-use crate::ui::views::LecternView;
 use crate::ui::colors;
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Element, Length};
 
-pub fn view_settings(app: &Lectern) -> Element<Message> {
+pub fn view_settings(app: &Lectern) -> Element<'_, Message> {
         use crate::ui::views::LecternView;
         let tab_bar = app.view_tab_bar();
         
         container(
-            scrollable(
-                column![
-                    tab_bar,
-                    Space::with_height(Length::Fixed(20.0)),
-                    text("Settings")
-                        .size(24)
-                        .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
-                    Space::with_height(Length::Fixed(20.0)),
+            column![
+                tab_bar,
+                scrollable(
+                    column![
+                        Space::with_height(Length::Fixed(20.0)),
+                        text("Settings")
+                            .size(24)
+                            .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
+                        Space::with_height(Length::Fixed(20.0)),
                     // Local Library section
                     container(
                         column![
@@ -121,7 +121,9 @@ pub fn view_settings(app: &Lectern) -> Element<Message> {
                 ]
                 .spacing(20)
                 .padding(20),
-            )
+            ),
+            ]
+            .spacing(10),
         )
         .width(Length::Fill)
         .height(Length::Fill)

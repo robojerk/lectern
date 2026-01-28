@@ -1,18 +1,16 @@
 use crate::ui::{Message, Lectern};
-use crate::ui::views::LecternView;
 use crate::ui::colors;
-use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input, Column, Space};
+use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input, text_editor, Column, Space};
 use iced::{Alignment, Element, Length};
 
-pub fn view_metadata(app: &Lectern) -> Element<Message> {
+pub fn view_metadata(app: &Lectern) -> Element<'_, Message> {
         // File selection area (shown when no book is selected or at the top)
-        let mut file_selection_col = Column::new();
+        let mut file_selection_col = Column::new().spacing(15).align_items(Alignment::Center);
         file_selection_col = file_selection_col.push(
-            text("📁 Select Audiobook")
-                .size(22)
+            text("Select Audiobook")
+                .size(24)
                 .style(iced::theme::Text::Color(colors::PRIMARY))
         );
-        file_selection_col = file_selection_col.push(Space::with_height(Length::Fixed(8.0)));
         file_selection_col = file_selection_col.push(
             text("Drag and drop a folder or M4B file here, or click Browse")
                 .size(14)
@@ -21,52 +19,52 @@ pub fn view_metadata(app: &Lectern) -> Element<Message> {
         
         // Show Wayland-specific note if on Wayland
         if std::env::var("WAYLAND_DISPLAY").is_ok() {
-            file_selection_col = file_selection_col.push(Space::with_height(Length::Fixed(5.0)));
             file_selection_col = file_selection_col.push(
-                text("ℹ️ Note: Drag and drop from file managers is not yet supported on Wayland in Iced 0.12. Please use the Browse buttons below.")
-                    .size(11)
+                text("ℹ Note: Drag and drop is not yet supported on Wayland. Use Browse buttons.")
+                    .size(12)
                     .style(iced::theme::Text::Color(colors::TEXT_TERTIARY))
             );
         }
-        file_selection_col = file_selection_col.push(Space::with_height(Length::Fixed(20.0)));
+        
         file_selection_col = file_selection_col.push(
             row![
                 button("Browse Files...")
                     .on_press(Message::BrowseFiles)
                     .style(iced::theme::Button::Primary)
-                    .padding([12, 20]),
+                    .padding([12, 24]),
                 button("Browse Folder...")
                     .on_press(Message::BrowseFolder)
                     .style(iced::theme::Button::Secondary)
-                    .padding([12, 20]),
+                    .padding([12, 24]),
             ]
-            .spacing(15)
+            .spacing(20)
             .align_items(Alignment::Center)
         );
-        if let Some(ref path) = app.selected_file_path {
+        
+        if let Some(ref path) = app.file.selected_file_path {
             file_selection_col = file_selection_col.push(
                 container(
                     text(format!("Selected: {}", 
-                        if path.len() > 60 {
-                            format!("{}...", &path[..60])
+                        if path.len() > 80 {
+                            format!("...{}", &path[path.len()-80..])
                         } else {
                             path.clone()
                         }))
                         .size(12)
                         .style(iced::theme::Text::Color(colors::TEXT_TERTIARY))
                 )
-                .padding([10, 15])
+                .padding([10, 20])
                 .style(iced::theme::Container::Box)
             );
         }
-        file_selection_col = file_selection_col.push(Space::with_height(Length::Fixed(10.0)));
-        if app.is_parsing_file {
+        
+        if app.file.is_parsing_file {
             file_selection_col = file_selection_col.push(
                 text("Parsing file...")
                     .size(14)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
+                    .style(iced::theme::Text::Color(colors::PRIMARY))
             );
-        } else if let Some(ref error) = app.file_parse_error {
+        } else if let Some(ref error) = app.file.file_parse_error {
             file_selection_col = file_selection_col.push(
                 text(format!("Error: {}", error))
                     .size(14)
@@ -75,19 +73,17 @@ pub fn view_metadata(app: &Lectern) -> Element<Message> {
         }
         
         let file_selection_area = container(
-            file_selection_col
-                .spacing(10)
-                .align_items(Alignment::Center)
-                .padding(40),
+            file_selection_col.padding(40)
         )
         .style(iced::theme::Container::Box)
         .width(Length::Fill);
         
-        if app.selected_book.is_none() {
+        if app.metadata.selected_book.is_none() {
             return container(
                 column![
                     file_selection_area,
                 ]
+                .max_width(800)
                 .spacing(20)
                 .align_items(Alignment::Center),
             )
@@ -102,45 +98,58 @@ pub fn view_metadata(app: &Lectern) -> Element<Message> {
         use crate::ui::views::LecternView;
         let tab_bar = app.view_tab_bar();
         
-        // Metadata fields - styled with labels
+        // Helper for building labeled fields
+        fn labeled_field<'a>(label: &str, input: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+            column![
+                text(label)
+                    .size(13)
+                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                container(input.into()).width(Length::Fill)
+            ]
+            .spacing(5)
+            .width(Length::Fill)
+            .into()
+        }
+
+        // Metadata grid
         let fields = column![
-            text("Book Metadata")
-                .size(20)
-                .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
-            Space::with_height(Length::Fixed(10.0)),
-            column![
-                text("Title")
-                    .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                text_input("Enter book title", &app.editing_title)
+            // Row 1: Title
+            labeled_field("Book Title", 
+                text_input("Enter book title", &app.metadata.editing_title)
                     .on_input(Message::TitleChanged)
-                    .padding(12),
-            ]
-            .spacing(5),
-            column![
-                text("Subtitle")
-                    .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                text_input("Enter subtitle (optional)", &app.editing_subtitle)
+                    .padding(12)
+                    .width(Length::Fill)
+            ),
+            
+            // Row 2: Subtitle
+            labeled_field("Subtitle", 
+                text_input("Enter subtitle (optional)", &app.metadata.editing_subtitle)
                     .on_input(Message::SubtitleChanged)
-                    .padding(12),
-            ]
-            .spacing(5),
-            column![
-                text("Author(s)")
-                    .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                text_input("Enter author name(s)", &app.editing_author)
-                    .on_input(Message::AuthorChanged)
-                    .padding(12),
-            ]
-            .spacing(5),
+                    .padding(12)
+                    .width(Length::Fill)
+            ),
+            
+            // Row 3: Author & Narrator
+            row![
+                labeled_field("Author(s)", 
+                    text_input("Enter author name(s)", &app.metadata.editing_author)
+                        .on_input(Message::AuthorChanged)
+                        .padding(12)
+                ),
+                labeled_field("Narrator(s)", 
+                    text_input("Enter narrator name(s)", &app.metadata.editing_narrator)
+                        .on_input(Message::NarratorChanged)
+                        .padding(12)
+                ),
+            ].spacing(20),
+            
+            // Row 4: Series
             row![
                 column![
                     text("Series")
-                        .size(12)
+                        .size(13)
                         .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                    text_input("Series name", &app.editing_series)
+                    text_input("Series name", &app.metadata.editing_series)
                         .on_input(Message::SeriesChanged)
                         .padding(12),
                 ]
@@ -148,102 +157,105 @@ pub fn view_metadata(app: &Lectern) -> Element<Message> {
                 .width(Length::FillPortion(3)),
                 column![
                     text("Series #")
-                        .size(12)
+                        .size(13)
                         .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                    text_input("Number", &app.editing_series_number)
+                    text_input("Number", &app.metadata.editing_series_number)
                         .on_input(Message::SeriesNumberChanged)
                         .padding(12),
                 ]
                 .spacing(5)
                 .width(Length::FillPortion(1)),
-            ]
-            .spacing(15),
-            column![
-                text("Narrator(s)")
-                    .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                text_input("Enter narrator name(s)", &app.editing_narrator)
-                    .on_input(Message::NarratorChanged)
-                    .padding(12),
-            ]
-            .spacing(5),
+            ].spacing(20),
+            
+            // Row 5: ISBN & ASIN
             row![
-                column![
-                    text("ISBN")
-                        .size(12)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                    text_input("ISBN", &app.editing_isbn)
+                labeled_field("ISBN", 
+                    text_input("ISBN", &app.metadata.editing_isbn)
                         .on_input(Message::IsbnChanged)
-                        .padding(10),
-                ]
-                .spacing(5)
-                .width(Length::FillPortion(1)),
-                column![
-                    text("ASIN")
-                        .size(12)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                    text_input("ASIN", &app.selected_book.as_ref().map(|b| b.asin.clone().unwrap_or_default()).unwrap_or_default())
+                        .padding(12)
+                ),
+                labeled_field("ASIN", 
+                    text_input("ASIN", &app.metadata.editing_asin)
                         .on_input(Message::AsinChanged)
-                        .padding(10),
-                ]
-                .spacing(5)
-                .width(Length::FillPortion(1)),
-            ]
-            .spacing(10),
+                        .padding(12)
+                ),
+            ].spacing(20),
+            
+            // Row 6: Publisher & Year
             row![
-                text_input("Publisher", &app.editing_publisher)
-                    .on_input(Message::PublisherChanged)
-                    .padding(10)
-                    .width(Length::FillPortion(1)),
-                text_input("Publish Year", &app.editing_publish_year)
-                    .on_input(Message::PublishYearChanged)
-                    .padding(10)
-                    .width(Length::FillPortion(1)),
-            ]
-            .spacing(10),
+                labeled_field("Publisher", 
+                    text_input("Publisher", &app.metadata.editing_publisher)
+                        .on_input(Message::PublisherChanged)
+                        .padding(12)
+                ),
+                labeled_field("Publish Year", 
+                    text_input("Year", &app.metadata.editing_publish_year)
+                        .on_input(Message::PublishYearChanged)
+                        .padding(12)
+                ),
+            ].spacing(20),
+            
+            // Row 7: Genre & Language
             row![
-                text_input("Genre", &app.editing_genre)
-                    .on_input(Message::GenreChanged)
-                    .padding(10)
-                    .width(Length::FillPortion(1)),
-                text_input("Language", &app.editing_language)
-                    .on_input(Message::LanguageChanged)
-                    .padding(10)
-                    .width(Length::FillPortion(1)),
-            ]
-            .spacing(10),
-            text_input("Tags (comma-separated)", &app.editing_tags)
-                .on_input(Message::TagsChanged)
-                .padding(10),
+                labeled_field("Genre", 
+                    text_input("Genre", &app.metadata.editing_genre)
+                        .on_input(Message::GenreChanged)
+                        .padding(12)
+                ),
+                labeled_field("Language", 
+                    text_input("Language", &app.metadata.editing_language)
+                        .on_input(Message::LanguageChanged)
+                        .padding(12)
+                ),
+            ].spacing(20),
+            
+            // Row 8: Tags
+            labeled_field("Tags (comma-separated)", 
+                text_input("Tags", &app.metadata.editing_tags)
+                    .on_input(Message::TagsChanged)
+                    .padding(12)
+            ),
+            
+            // Row 9: Checkboxes
             row![
-                checkbox("Explicit", app.editing_explicit)
+                checkbox("Explicit Content", app.metadata.editing_explicit)
                     .on_toggle(Message::ExplicitToggled)
-                    .text_size(14),
-                Space::with_width(Length::Fixed(30.0)),
-                checkbox("Abridged", app.editing_abridged)
+                    .text_size(15),
+                Space::with_width(Length::Fixed(40.0)),
+                checkbox("Abridged Version", app.metadata.editing_abridged)
                     .on_toggle(Message::AbridgedToggled)
-                    .text_size(14),
+                    .text_size(15),
             ]
-            .spacing(20)
             .padding([10, 0]),
+            
+            // Row 10: Description
             column![
                 text("Description")
-                    .size(12)
+                    .size(13)
                     .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                text_input("Enter book description", &app.editing_description)
-                    .on_input(Message::DescriptionChanged)
-                    .padding(12)
-                    .size(14),
+                container(
+                    text_editor(&app.metadata.editing_description_content)
+                        .on_action(Message::DescriptionAction)
+                        .padding(15)
+                )
+                .height(Length::Fixed(200.0))
+                .style(iced::theme::Container::Box),
             ]
-            .spacing(5),
+            .spacing(8),
         ]
-        .spacing(15);
+        .spacing(20)
+        .max_width(1000);
         
-        // Book is selected - hide file selection area, show tabs and fields
         container(
             column![
                 tab_bar,
-                scrollable(fields).height(Length::Fill),
+                scrollable(
+                    container(fields)
+                        .width(Length::Fill)
+                        .padding([5, 20, 20, 5])
+                )
+                .width(Length::Fill)
+                .height(Length::Fill),
             ]
             .spacing(15),
         )

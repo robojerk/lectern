@@ -1,152 +1,74 @@
 use crate::ui::{Message, Lectern};
-use crate::ui::views::LecternView;
 use crate::ui::colors;
-use crate::services::BookMetadata;
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Column, Space, image};
-use iced::widget::image::Handle;
+use crate::ui::state::MetadataProvider;
+use crate::models::BookMetadata;
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Column, Space, image, pick_list};
 use iced::{Alignment, Element, Length};
 
-pub fn view_search(app: &Lectern) -> Element<Message> {
+pub fn view_search(app: &Lectern) -> Element<'_, Message> {
         // Tab bar for navigation
         use crate::ui::views::LecternView;
         let tab_bar = app.view_tab_bar();
         
-        // Provider selection
-        let provider_section = container(
-            column![
-                text("Search Provider:")
-                    .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                Space::with_height(Length::Fixed(5.0)),
-                // First row of providers
-                row![
-                    button("Auto")
-                        .style(if app.metadata_provider == "auto" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("auto".to_string()))
-                        .padding([6, 12]),
-                    button("Audible.com")
-                        .style(if app.metadata_provider == "audible_com" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("audible_com".to_string()))
-                        .padding([6, 12]),
-                    button("Audible.ca")
-                        .style(if app.metadata_provider == "audible_ca" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("audible_ca".to_string()))
-                        .padding([6, 12]),
-                    button("Audnexus")
-                        .style(if app.metadata_provider == "audnexus" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("audnexus".to_string()))
-                        .padding([6, 12]),
-                ]
-                .spacing(8)
-                .align_items(Alignment::Center),
-                Space::with_height(Length::Fixed(5.0)),
-                // Second row of providers
-                row![
-                    button("Google Books")
-                        .style(if app.metadata_provider == "google_books" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("google_books".to_string()))
-                        .padding([6, 12]),
-                    button("iTunes")
-                        .style(if app.metadata_provider == "itunes" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("itunes".to_string()))
-                        .padding([6, 12]),
-                    button("Open Library")
-                        .style(if app.metadata_provider == "open_library" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("open_library".to_string()))
-                        .padding([6, 12]),
-                    button("FantLab.ru")
-                        .style(if app.metadata_provider == "fantlab" {
-                            iced::theme::Button::Primary
-                        } else {
-                            iced::theme::Button::Secondary
-                        })
-                        .on_press(Message::MetadataProviderChanged("fantlab".to_string()))
-                        .padding([6, 12]),
-                ]
-                .spacing(8)
-                .align_items(Alignment::Center),
-            ]
-            .spacing(5),
-        )
-        .padding(10)
-        .style(iced::theme::Container::Box);
-        
-        // Search bar
-        let search_bar = column![
-            row![
-                button("← Back")
-                    .on_press(Message::SwitchToMetadata)
-                    .style(iced::theme::Button::Secondary)
-                    .padding([10, 15]),
-                text_input("Search Title or ASIN...", &app.search_query)
-                    .on_input(Message::SearchQueryChanged)
-                    .on_submit(Message::PerformSearch)
-                    .width(Length::Fill)
-                    .padding(12),
-                text_input("Author (optional)...", &app.search_author)
-                    .on_input(Message::SearchAuthorChanged)
-                    .on_submit(Message::PerformSearch)
-                    .width(Length::Fill)
-                    .padding(12),
-                button(
-                    if app.is_searching {
-                        "Searching..."
-                    } else {
-                        "Search"
-                    }
-                )
-                .on_press(Message::PerformSearch)
-                .style(iced::theme::Button::Primary)
-                .padding([12, 20]),
-            ]
-            .spacing(10)
-            .align_items(Alignment::Center),
+        // Search bar with Provider Dropdown
+        let search_bar = row![
+            pick_list(
+                &MetadataProvider::ALL[..],
+                Some(app.metadata.metadata_provider),
+                Message::MetadataProviderChanged
+            )
+            .padding(10)
+            .width(Length::Fixed(150.0)),
+            
+            text_input("Search Title or ASIN...", &app.search.query)
+                .on_input(Message::SearchQueryChanged)
+                .on_submit(Message::PerformSearch)
+                .width(Length::Fill)
+                .padding(12),
+            
+            text_input("Author (optional)...", &app.search.author)
+                .on_input(Message::SearchAuthorChanged)
+                .on_submit(Message::PerformSearch)
+                .width(Length::Fill)
+                .padding(12),
+            
+            button(
+                if app.search.is_searching {
+                    "Searching..."
+                } else {
+                    "Search"
+                }
+            )
+            .on_press(Message::PerformSearch)
+            .style(iced::theme::Button::Primary)
+            .padding([12, 20]),
         ]
-        .spacing(10);
+        .spacing(10)
+        .align_items(Alignment::Center);
         
         // Search results
-        let results_content: Element<Message> = if app.is_searching {
-            container(text("Searching...").size(18))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x()
-                .center_y()
-                .style(iced::theme::Container::Box)
-                .into()
-        } else if let Some(ref error) = app.search_error {
+        let results_content: Element<Message> = if app.search.is_searching {
             container(
                 column![
+                    text("Searching...").size(24),
+                    text("Querying providers for metadata").size(14)
+                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                ]
+                .spacing(10)
+                .align_items(Alignment::Center)
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x()
+            .center_y()
+            .into()
+        } else if let Some(ref error) = app.search.error {
+            container(
+                column![
+                    text("Search Failed").size(20).style(iced::theme::Text::Color(colors::ERROR)),
                     text(format!("Error: {}", error)).size(16),
                     text("Check console for details").size(12)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+                        .style(iced::theme::Text::Color(colors::TEXT_TERTIARY)),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center),
@@ -155,14 +77,13 @@ pub fn view_search(app: &Lectern) -> Element<Message> {
             .height(Length::Fill)
             .center_x()
             .center_y()
-            .style(iced::theme::Container::Box)
             .into()
-        } else if app.search_results.is_empty() && !app.search_query.is_empty() {
+        } else if app.search.results.is_empty() && !app.search.query.is_empty() {
             container(
                 column![
-                    text("No results found").size(16),
-                    text("Try a different search term or ASIN").size(12)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+                    text("No results found").size(20),
+                    text("Try a different search term or ASIN").size(14)
+                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center),
@@ -171,57 +92,65 @@ pub fn view_search(app: &Lectern) -> Element<Message> {
             .height(Length::Fill)
             .center_x()
             .center_y()
-            .style(iced::theme::Container::Box)
             .into()
-        } else if app.search_results.is_empty() {
-            container(text("Enter a book title, author, or ASIN to search").size(16))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x()
-                .center_y()
-                .style(iced::theme::Container::Box)
-                .into()
+        } else if app.search.results.is_empty() {
+            container(
+                column![
+                    text("Ready to Search").size(20).style(iced::theme::Text::Color(colors::PRIMARY)),
+                    text("Enter a book title, author, or ASIN to begin").size(14)
+                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                ]
+                .spacing(10)
+                .align_items(Alignment::Center)
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x()
+            .center_y()
+            .into()
         } else {
             // Pagination: show only current page
-            let start_idx = app.search_current_page * app.search_results_per_page;
-            let end_idx = (start_idx + app.search_results_per_page).min(app.search_results.len());
-            let total_pages = (app.search_results.len() + app.search_results_per_page - 1) / app.search_results_per_page;
-            let current_page_results = &app.search_results[start_idx..end_idx];
+            let start_idx = app.search.current_page * app.search.results_per_page;
+            let end_idx = (start_idx + app.search.results_per_page).min(app.search.results.len());
+            let total_pages = (app.search.results.len() + app.search.results_per_page - 1) / app.search.results_per_page;
+            let current_page_results = &app.search.results[start_idx..end_idx];
             
-            let mut results_column = Column::new();
+            let mut results_column = Column::new().spacing(12);
             
             // Pagination info and controls
-            if app.search_results.len() > app.search_results_per_page {
+            if app.search.results.len() > app.search.results_per_page {
                 results_column = results_column.push(
                     row![
-                        text(format!("Page {} of {} ({} total results)", 
-                            app.search_current_page + 1, 
-                            total_pages.max(1),
-                            app.search_results.len()))
+                        text(format!("Showing {} - {} of {} results", 
+                            start_idx + 1,
+                            end_idx,
+                            app.search.results.len()))
                             .size(14)
                             .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
                         Space::with_width(Length::Fill),
-                        button("← Previous")
+                        button("Previous")
                             .on_press(Message::PreviousPage)
-                            .style(if app.search_current_page > 0 {
+                            .style(if app.search.current_page > 0 {
                                 iced::theme::Button::Primary
                             } else {
                                 iced::theme::Button::Secondary
                             })
                             .padding([8, 15]),
-                        button("Next →")
+                        text(format!("Page {} / {}", app.search.current_page + 1, total_pages.max(1)))
+                            .size(14),
+                        button("Next")
                             .on_press(Message::NextPage)
-                            .style(if app.search_current_page < total_pages.saturating_sub(1) {
+                            .style(if app.search.current_page < total_pages.saturating_sub(1) {
                                 iced::theme::Button::Primary
                             } else {
                                 iced::theme::Button::Secondary
                             })
                             .padding([8, 15]),
                     ]
-                    .spacing(10)
+                    .spacing(15)
                     .align_items(Alignment::Center)
                 );
-                results_column = results_column.push(Space::with_height(Length::Fixed(10.0)));
+                results_column = results_column.push(Space::with_height(Length::Fixed(5.0)));
             }
             
             // Display results for current page
@@ -232,22 +161,20 @@ pub fn view_search(app: &Lectern) -> Element<Message> {
             
             scrollable(
                 results_column
-                    .spacing(10)
                     .padding(10),
             )
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into()
         };
         
         container(
             column![
                 tab_bar,
-                Space::with_height(Length::Fixed(15.0)),
-                provider_section,
-                Space::with_height(Length::Fixed(10.0)),
                 search_bar,
                 results_content,
             ]
-            .spacing(15),
+            .spacing(20),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -255,58 +182,19 @@ pub fn view_search(app: &Lectern) -> Element<Message> {
 }
 
 pub fn view_search_result<'a>(index: usize, book: &BookMetadata, app: &'a Lectern) -> Element<'a, Message> {
-        // Try to load cover image
+        // Try to load cover image from cached handles
         let cover_display: Element<Message> = if let Some(ref cover_url) = book.cover_url {
-            if cover_url.starts_with("http://") || cover_url.starts_with("https://") {
-                // Check if we have it cached
-                if let Some(img_data) = app.search_result_covers.get(cover_url) {
-                    // Try to load the image
-                    match ::image::load_from_memory(img_data) {
-                        Ok(img) => {
-                            let rgba = img.to_rgba8();
-                            let (width, height) = rgba.dimensions();
-                            let pixels: Vec<u8> = rgba.into_raw();
-                            let handle = Handle::from_pixels(width, height, pixels);
-                            container(
-                                image(handle)
-                                    .width(Length::Fixed(80.0))
-                                    .height(Length::Fixed(120.0))
-                            )
-                            .width(80)
-                            .height(120)
-                            .into()
-                        },
-                        Err(_) => {
-                            // Failed to load - show placeholder
-                            container(
-                                text("📖")
-                                    .size(40)
-                                    .horizontal_alignment(iced::alignment::Horizontal::Center)
-                            )
-                            .width(80)
-                            .height(120)
-                            .style(iced::theme::Container::Box)
-                            .center_x()
-                            .center_y()
-                            .into()
-                        }
-                    }
-                } else {
-                    // Not cached yet - show placeholder
-                    container(
-                        text("📖")
-                            .size(40)
-                            .horizontal_alignment(iced::alignment::Horizontal::Center)
-                    )
-                    .width(80)
-                    .height(120)
-                    .style(iced::theme::Container::Box)
-                    .center_x()
-                    .center_y()
-                    .into()
-                }
+            if let Some(handle) = app.search.result_covers.get(cover_url) {
+                container(
+                    image(handle.clone())
+                        .width(Length::Fixed(80.0))
+                        .height(Length::Fixed(120.0))
+                )
+                .width(80)
+                .height(120)
+                .into()
             } else {
-                // Not a URL - show placeholder
+                // Not cached yet or not a URL - show placeholder
                 container(
                     text("📖")
                         .size(40)

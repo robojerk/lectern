@@ -1,54 +1,12 @@
 use tokio;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+
+pub mod ffprobe;
+pub mod playback;
+pub mod conversion;
 
 // Define the BookMetadata structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BookMetadata {
-    pub title: String,
-    pub subtitle: Option<String>,
-    pub author: String,
-    pub isbn: Option<String>,
-    pub asin: Option<String>,
-    pub description: Option<String>,
-    pub cover_url: Option<String>,
-    pub duration: Option<String>,
-    pub narrator: Option<String>,
-    pub publisher: Option<String>,
-    pub publish_year: Option<String>,
-    pub series: Option<String>,
-    pub series_number: Option<String>,
-    pub genre: Option<String>,
-    pub tags: Option<String>, // Comma-separated tags
-    pub language: Option<String>,
-    pub explicit: Option<bool>,
-    pub abridged: Option<bool>,
-}
-
-impl Default for BookMetadata {
-    fn default() -> Self {
-        BookMetadata {
-            title: String::new(),
-            subtitle: None,
-            author: String::new(),
-            isbn: None,
-            asin: None,
-            description: None,
-            cover_url: None,
-            duration: None,
-            narrator: None,
-            publisher: None,
-            publish_year: None,
-            series: None,
-            series_number: None,
-            genre: None,
-            tags: None,
-            language: None,
-            explicit: None,
-            abridged: None,
-        }
-    }
-}
+pub use crate::models::BookMetadata;
 
 // Define the AudioService struct
 pub struct AudioService;
@@ -366,7 +324,7 @@ impl AudioService {
         // Try providers in order of preference
         // 1. Audible.com (best results for audiobooks, uses catalog API + Audnexus)
         match Self::search_audible(query, "us").await {
-            Ok(mut audible_results) if !audible_results.is_empty() => {
+            Ok(audible_results) if !audible_results.is_empty() => {
                 println!("[DEBUG] Audible.com returned {} results", audible_results.len());
                 results = audible_results;
             },
@@ -377,7 +335,7 @@ impl AudioService {
         // 2. Open Library (good coverage, free)
         if results.is_empty() {
             match Self::search_open_library(query).await {
-                Ok(mut open_lib_results) if !open_lib_results.is_empty() => {
+                Ok(open_lib_results) if !open_lib_results.is_empty() => {
                     println!("[DEBUG] Open Library returned {} results", open_lib_results.len());
                     results = open_lib_results;
                 },
@@ -389,7 +347,7 @@ impl AudioService {
         // 3. Google Books (good coverage, free)
         if results.is_empty() {
             match Self::search_google_books(query).await {
-                Ok(mut google_results) if !google_results.is_empty() => {
+                Ok(google_results) if !google_results.is_empty() => {
                     println!("[DEBUG] Google Books returned {} results", google_results.len());
                     results = google_results;
                 },
@@ -401,7 +359,7 @@ impl AudioService {
         // 4. iTunes (good for audiobooks)
         if results.is_empty() {
             match Self::search_itunes(query).await {
-                Ok(mut itunes_results) if !itunes_results.is_empty() => {
+                Ok(itunes_results) if !itunes_results.is_empty() => {
                     println!("[DEBUG] iTunes returned {} results", itunes_results.len());
                     results = itunes_results;
                 },
@@ -433,7 +391,7 @@ impl AudioService {
     }
     
     // Search Audnexus by ISBN to get ASIN
-    async fn search_audnexus_by_isbn(isbn: &str) -> Result<Vec<BookMetadata>, String> {
+    async fn search_audnexus_by_isbn(_isbn: &str) -> Result<Vec<BookMetadata>, String> {
         // Audnexus doesn't have a direct ISBN endpoint, but we can try searching by ISBN
         // For now, return empty - this would need a different approach
         Ok(Vec::new())
@@ -822,7 +780,7 @@ impl AudioService {
     // Method to upload to Audiobookshelf
     pub async fn upload_to_audiobookshelf(
         host: &str,
-        token: &str,
+        _token: &str,
         library_id: &str,
         file_path: &str,
     ) -> Result<(), String> {
@@ -833,7 +791,7 @@ impl AudioService {
     }
     
     // Method to scan library in Audiobookshelf
-    pub async fn scan_library(host: &str, token: &str, library_id: &str) -> Result<(), String> {
+    pub async fn scan_library(host: &str, _token: &str, library_id: &str) -> Result<(), String> {
         // Implementation would use reqwest to trigger library scan
         // This is a placeholder
         println!("Scanning library {} at {}", library_id, host);
@@ -841,10 +799,11 @@ impl AudioService {
     }
     
     // Fetch chapters from Audnexus by ASIN
-    pub async fn fetch_chapters_by_asin(asin: &str) -> Result<Vec<crate::models::Chapter>, String> {
+    pub async fn fetch_chapters_by_asin(asin: &str, region: &str) -> Result<Vec<crate::models::Chapter>, String> {
         
         let client = reqwest::Client::new();
-        let url = format!("https://api.audnex.us/books/{}/chapters", urlencoding::encode(asin));
+        let url = format!("https://api.audnex.us/books/{}/chapters?region={}", 
+                         urlencoding::encode(asin), region);
         
         println!("[DEBUG] Fetching chapters from Audnexus: {}", url);
         
@@ -958,7 +917,7 @@ impl AudioService {
             };
             
             // Build query parameters for Audible Catalog API
-            let mut query_params = vec![
+            let query_params = vec![
                 ("num_results", "10"),
                 ("products_sort_by", "Relevance"),
                 ("title", query),
@@ -1172,7 +1131,7 @@ impl AudioService {
     }
     
     // Search FantLab.ru API
-    async fn search_fantlab(query: &str) -> Result<Vec<BookMetadata>, String> {
+    async fn search_fantlab(_query: &str) -> Result<Vec<BookMetadata>, String> {
         // FantLab.ru doesn't have a public API, so this would require web scraping
         // For now, return an error indicating it's not implemented
         Err("FantLab.ru search is not yet implemented. FantLab.ru does not provide a public API.".to_string())
