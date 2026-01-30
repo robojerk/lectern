@@ -26,6 +26,7 @@ Thumbs.db
 /tmp/
 *.tmp
 log.txt
+/issue/
 
 # AppImage build artifacts
 AppDir/
