@@ -1,7 +1,7 @@
 ---
 name: Build AppImage
 
-"on":
+on:
   push:
     tags:
       - 'v*'
@@ -49,7 +49,7 @@ jobs:
           python3 -m venv /tmp/appimage-builder-venv
           /tmp/appimage-builder-venv/bin/pip install --upgrade pip \
             appimage-builder
-          echo "/tmp/appimage-builder-venv/bin" >> $GITHUB_PATH
+          echo "/tmp/appimage-builder-venv/bin" >> "$GITHUB_PATH"
 
       - name: Create lectern.desktop
         run: |
@@ -58,7 +58,7 @@ jobs:
           Type=Application
           Name=Lectern
           Comment=Audiobook Preparation Tool for Audiobookshelf
-          Exec=sh -c 'unset WAYLAND_DISPLAY; exec lectern'
+          Exec=lectern
           Icon=lectern
           Categories=AudioVideo;Audio;
           Terminal=false
@@ -78,7 +78,9 @@ jobs:
                 exit 1
               fi
               mkdir -p $TARGET_APPDIR/usr/bin
-              cp "$BINARY" $TARGET_APPDIR/usr/bin/lectern
+              cp "$BINARY" $TARGET_APPDIR/usr/bin/lectern.bin
+              chmod +x $TARGET_APPDIR/usr/bin/lectern.bin
+              printf '%s\n' '#!/bin/sh' 'unset WAYLAND_DISPLAY' 'export DISPLAY="${DISPLAY:-:0}"' 'exec "$(dirname "$0")/lectern.bin" "$@"' > $TARGET_APPDIR/usr/bin/lectern
               chmod +x $TARGET_APPDIR/usr/bin/lectern
               mkdir -p $TARGET_APPDIR/usr/share/lectern/assets
               cp -r ${SOURCE_DIR:-.}/assets/* \
@@ -128,6 +130,8 @@ jobs:
                 image: fedora:latest
                 command: |
                   dnf install -y ffmpeg
+                  unset WAYLAND_DISPLAY
+                  export DISPLAY=:0
                   ./AppDir/AppRun --version || true
           AppImage:
             arch: x86_64

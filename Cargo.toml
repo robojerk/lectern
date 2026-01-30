@@ -3,13 +3,21 @@ name = "lectern"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+# Optimize for smaller binary (GUI app doesn't need max speed)
+strip = true
+lto = "thin"
+codegen-units = 1
+opt-level = "z"     # Size over speed
+panic = "abort"     # No unwinding → smaller binary
+
 [dependencies]
 # Pure Rust GUI
 iced = { version = "0.12", features = ["image", "tokio", "canvas"] }
 iced_renderer = { version = "0.12", features = ["geometry"] }
 
-# Async runtime
-tokio = { version = "1", features = ["full"] }
+# Async runtime (only features we use: runtime, sync, process, time, io-util)
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "process", "time", "io-util", "macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
