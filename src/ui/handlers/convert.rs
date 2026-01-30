@@ -7,12 +7,19 @@ pub fn handle_convert(app: &mut Lectern, message: Message) -> Option<Command<Mes
     match message {
         Message::StartConversion => {
             let output_path = if let Some(ref lib_path) = app.local_library_path {
-                // TODO: Use template for path generation
-                // For now, just use simple filename
-                Some(format!("{}/{}", lib_path, 
-                    app.metadata.selected_book.as_ref()
-                        .map(|b| format!("{}.m4b", b.title.replace("/", "-")))
-                        .unwrap_or_else(|| "output.m4b".to_string())))
+                Some(crate::ui::helpers::apply_media_template(
+                    &app.media_management_template,
+                    lib_path,
+                    &app.metadata.editing_title,
+                    &app.metadata.editing_author,
+                    &app.metadata.editing_series,
+                    &app.metadata.editing_series_number,
+                    &app.metadata.editing_publish_year,
+                    &app.metadata.editing_genre,
+                    &app.metadata.editing_asin,
+                    &app.metadata.editing_language,
+                    &app.metadata.editing_tags,
+                ))
             } else {
                 app.output_path.clone()
             };

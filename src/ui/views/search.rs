@@ -1,5 +1,4 @@
 use crate::ui::{Message, Lectern};
-use crate::ui::colors;
 use crate::ui::state::MetadataProvider;
 use crate::models::BookMetadata;
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Column, Space, image, pick_list};
@@ -40,7 +39,7 @@ pub fn view_search(app: &Lectern) -> Element<'_, Message> {
                 }
             )
             .on_press(Message::PerformSearch)
-            .style(iced::theme::Button::Primary)
+            .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
             .padding([12, 20]),
         ]
         .spacing(10)
@@ -52,7 +51,7 @@ pub fn view_search(app: &Lectern) -> Element<'_, Message> {
                 column![
                     text("Searching...").size(24),
                     text("Querying providers for metadata").size(14)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center)
@@ -65,10 +64,10 @@ pub fn view_search(app: &Lectern) -> Element<'_, Message> {
         } else if let Some(ref error) = app.search.error {
             container(
                 column![
-                    text("Search Failed").size(20).style(iced::theme::Text::Color(colors::ERROR)),
+                    text("Search Failed").size(20).style(iced::theme::Text::Color(app.palette().danger.base.color)),
                     text(format!("Error: {}", error)).size(16),
                     text("Check console for details").size(12)
-                        .style(iced::theme::Text::Color(colors::TEXT_TERTIARY)),
+                        .style(iced::theme::Text::Color(app.palette().secondary.base.text)),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center),
@@ -83,7 +82,7 @@ pub fn view_search(app: &Lectern) -> Element<'_, Message> {
                 column![
                     text("No results found").size(20),
                     text("Try a different search term or ASIN").size(14)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center),
@@ -96,9 +95,9 @@ pub fn view_search(app: &Lectern) -> Element<'_, Message> {
         } else if app.search.results.is_empty() {
             container(
                 column![
-                    text("Ready to Search").size(20).style(iced::theme::Text::Color(colors::PRIMARY)),
+                    text("Ready to Search").size(20).style(iced::theme::Text::Color(app.palette().primary.base.color)),
                     text("Enter a book title, author, or ASIN to begin").size(14)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                 ]
                 .spacing(10)
                 .align_items(Alignment::Center)
@@ -126,7 +125,7 @@ pub fn view_search(app: &Lectern) -> Element<'_, Message> {
                             end_idx,
                             app.search.results.len()))
                             .size(14)
-                            .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                            .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                         Space::with_width(Length::Fill),
                         button("Previous")
                             .on_press(Message::PreviousPage)
@@ -231,23 +230,23 @@ pub fn view_search_result<'a>(index: usize, book: &BookMetadata, app: &'a Lecter
                 column![
                     text(&book.title)
                         .size(18)
-                        .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
+                        .style(iced::theme::Text::Color(app.palette().background.base.text)),
                     Space::with_height(Length::Fixed(5.0)),
                     text(&book.author)
                         .size(14)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                     Space::with_height(Length::Fixed(8.0)),
                     if let Some(ref narrator) = book.narrator {
                         text(format!("Narrated by: {}", narrator))
                             .size(12)
-                            .style(iced::theme::Text::Color(colors::TEXT_TERTIARY))
+                            .style(iced::theme::Text::Color(app.palette().secondary.base.text))
                     } else {
                         text("").size(12)
                     },
                     if let Some(ref year) = book.publish_year {
                         text(format!("Published: {}", year))
                             .size(12)
-                            .style(iced::theme::Text::Color(colors::TEXT_TERTIARY))
+                            .style(iced::theme::Text::Color(app.palette().secondary.base.text))
                     } else {
                         text("").size(12)
                     },

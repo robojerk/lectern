@@ -1,0 +1,49 @@
+/**
+ * Candy-Inspired KDE Plasma Light Theme CSS
+ * Soft pastel base with vibrant candy accents for a sugary bright look.
+ */
+
+ :root {
+    /* Backgrounds & surfaces */
+    --candy-background: #f9f5fd;       /* Soft lavender-white */
+    --candy-surface: #ffffff;          /* Clean cards/panels */
+    --candy-surface-alt: #f3e8ff;      /* Subtle lavender tint */
+    --candy-hover: #f0e4ff;            /* Hover */
+    --candy-active: #e9d5ff;           /* Active/selected */
+  
+    /* Text & foreground */
+    --candy-text: #2d1b47;             /* Deep purple-gray text */
+    --candy-text-secondary: #5c3f7e;   /* Secondary */
+    --candy-text-muted: #8a6bb8;
+  
+    /* Candy accents – same vibrant pops */
+    --candy-accent: #f06292;           /* Hot pink */
+    --candy-accent-hover: #ec4899;
+    --candy-accent-active: #db2777;
+    --candy-teal: #14b8a6;
+    --candy-purple: #a855f7;
+  
+    /* Borders & shadows */
+    --candy-border: #e0d4f5;
+    --candy-shadow: rgba(139, 92, 246, 0.12); /* Subtle purple shadow */
+  
+    /* Semantic aliases */
+    --background: var(--candy-background);
+    --surface: var(--candy-surface);
+    --surface-hover: var(--candy-hover);
+    --text-primary: var(--candy-text);
+    --text-secondary: var(--candy-text-secondary);
+    --accent: var(--candy-accent);
+    --border: var(--candy-border);
+  }
+  
+  /* Usage example (same as dark, just swap :root vars) */
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    font-family: system-ui, sans-serif;
+    margin: 0;
+    padding: 1rem;
+  }
+  
+  /* ... rest of components (card, button, a) identical to dark version for consistency ... */

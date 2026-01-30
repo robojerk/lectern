@@ -1,0 +1,174 @@
+---
+name: Build AppImage
+
+"on":
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # GitHub ubuntu-latest has rustup; act's container does not.
+      - name: Install Rust toolchain
+        run: |
+          if command -v rustup >/dev/null 2>&1; then
+            rustup update stable
+            rustup default stable
+          else
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "build-appimage"
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Install appimage-builder and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-venv python3-pip \
+            patchelf desktop-file-utils \
+            fakeroot strace fuse libfuse2 \
+            libgdk-pixbuf2.0-dev libgtk-3-bin \
+            squashfs-tools zsync
+          python3 -m venv /tmp/appimage-builder-venv
+          /tmp/appimage-builder-venv/bin/pip install --upgrade pip \
+            appimage-builder
+          echo "/tmp/appimage-builder-venv/bin" >> $GITHUB_PATH
+
+      - name: Create lectern.desktop
+        run: |
+          cat << 'DESKTOP_EOF' > lectern.desktop
+          [Desktop Entry]
+          Type=Application
+          Name=Lectern
+          Comment=Audiobook Preparation Tool for Audiobookshelf
+          Exec=sh -c 'unset WAYLAND_DISPLAY; exec lectern'
+          Icon=lectern
+          Categories=AudioVideo;Audio;
+          Terminal=false
+          StartupNotify=true
+          DESKTOP_EOF
+
+      - name: Create AppImageBuilder.yml
+        run: |
+          cat << 'RECIPE_EOF' > AppImageBuilder.yml
+          version: 1
+          script:
+            - |
+              set -e
+              BINARY="${SOURCE_DIR:-.}/target/release/lectern"
+              if [ ! -f "$BINARY" ]; then
+                echo "error: release binary not found at $BINARY (build first)"
+                exit 1
+              fi
+              mkdir -p $TARGET_APPDIR/usr/bin
+              cp "$BINARY" $TARGET_APPDIR/usr/bin/lectern
+              chmod +x $TARGET_APPDIR/usr/bin/lectern
+              mkdir -p $TARGET_APPDIR/usr/share/lectern/assets
+              cp -r ${SOURCE_DIR:-.}/assets/* \
+                $TARGET_APPDIR/usr/share/lectern/assets/ 2>/dev/null || true
+              mkdir -p $TARGET_APPDIR/usr/share/applications
+              cp ${SOURCE_DIR:-.}/lectern.desktop \
+                $TARGET_APPDIR/usr/share/applications/
+              mkdir -p $TARGET_APPDIR/usr/share/icons/hicolor/256x256/apps
+              cp ${SOURCE_DIR:-.}/assets/png/lectern.png \
+                $TARGET_APPDIR/usr/share/icons/hicolor/256x256/apps/lectern.png
+          AppDir:
+            path: ./AppDir
+            app_info:
+              id: com.lectern.app
+              name: Lectern
+              icon: lectern
+              version: "0.1.0"
+              exec: usr/bin/lectern
+              exec_args: $@
+            apt:
+              arch:
+                - amd64
+              sources:
+                - sourceline: >
+                    deb [arch=amd64] http://archive.ubuntu.com/ubuntu/
+                    jammy main restricted universe multiverse
+                  key_url: >
+                    http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C
+              include:
+                - ffmpeg
+                - libssl3
+                - ca-certificates
+                - libc6
+                - libgcc-s1
+                - libstdc++6
+            files:
+              exclude:
+                - usr/share/man
+                - usr/share/doc/*/README.*
+                - usr/share/doc/*/changelog.*
+                - usr/share/doc/*/copyright
+                - usr/share/doc/*/NEWS.*
+                - usr/share/doc/*/AUTHORS.*
+                - usr/share/doc/*/TODO.*
+            test:
+              fedora:
+                image: fedora:latest
+                command: |
+                  dnf install -y ffmpeg
+                  ./AppDir/AppRun --version || true
+          AppImage:
+            arch: x86_64
+          RECIPE_EOF
+
+      - name: Set AppImage version from tag
+        run: |
+          APP_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ -z "$APP_VERSION" || "$APP_VERSION" == "main" ]]; then
+            APP_VERSION="0.0.0-draft"
+          fi
+          sed -i "s/version: \"0.1.0\"/version: \"$APP_VERSION\"/" \
+            AppImageBuilder.yml
+
+      - name: Set AppImage update info
+        run: |
+          U="gh-releases-zsync|${{ github.repository_owner }}|lectern|"
+          U="${U}latest|*x86_64.AppImage.zsync"
+          echo "UPDATE_INFO=$U" >> $GITHUB_ENV
+
+      - name: Build AppImage
+        run: |
+          appimage-builder --recipe AppImageBuilder.yml \
+            --skip-test
+
+      - name: Upload AppImage artifact
+        if: env.ACT != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lectern-appimage
+          path: |
+            *.AppImage
+            *.AppImage.zsync
+          retention-days: 30
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/') && env.ACT != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.AppImage
+            *.AppImage.zsync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

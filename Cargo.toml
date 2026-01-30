@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 # Pure Rust GUI
-iced = { version = "0.12", features = ["image", "tokio"] }
+iced = { version = "0.12", features = ["image", "tokio", "canvas"] }
+iced_renderer = { version = "0.12", features = ["geometry"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

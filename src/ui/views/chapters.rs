@@ -1,47 +1,54 @@
 use crate::ui::{Message, Lectern};
 use crate::ui::colors;
 use crate::utils::time::format_time;
-use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input, Column, Space, Image};
-use iced::{Alignment, Element, Length};
-use iced::widget::image::Handle;
-use std::collections::HashMap;
+use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input, tooltip, Column, Space, Image};
+use iced::widget::tooltip::Position;
+use iced::{Alignment, Element, Length, Point};
+use iced::widget::canvas::{Canvas, Frame, Path, Program, Stroke};
+use iced::Color;
 
-// Load chapter action icons from PNG files
-fn load_chapter_icons() -> HashMap<String, Handle> {
-    let mut icons = HashMap::new();
-    
-    // Load each icon file
-    let icon_files = vec![
-        ("lock", "assets/png/lock_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png"),
-        ("lock_open", "assets/png/lock_open_right_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png"),
-        ("delete", "assets/png/delete_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png"),
-        ("insert", "assets/png/add_row_below_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png"),
-        ("play", "assets/png/play_circle_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png"),
-        ("stop", "assets/png/stop_circle_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png"),
-    ];
-    
-    for (name, path) in icon_files {
-        if let Ok(bytes) = std::fs::read(path) {
-            // Load image using image crate and convert to Handle
-            match ::image::load_from_memory(&bytes) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    let (width, height) = rgba.dimensions();
-                    let pixels: Vec<u8> = rgba.into_raw();
-                    icons.insert(name.to_string(), Handle::from_pixels(width, height, pixels));
-                },
-                Err(e) => {
-                    eprintln!("[WARNING] Failed to load icon {}: {}", path, e);
-                }
-            }
-        } else {
-            // Fallback: create empty handle if file not found
-            eprintln!("[WARNING] Icon file not found: {}", path);
-        }
-    }
-    
-    icons
+/// Canvas program that draws a rotating arc (loading spinner).
+#[derive(Debug)]
+struct SpinnerProgram {
+    rotation_degrees: f32,
+    color: Color,
 }
+
+impl Program<Message> for SpinnerProgram {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &iced::Renderer,
+        _theme: &iced::Theme,
+        bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<iced_renderer::Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        let center = frame.center();
+        let r = (bounds.size().width.min(bounds.size().height) * 0.4) / 2.0;
+        let start_rad = self.rotation_degrees.to_radians();
+        let end_rad = start_rad + 3.0 * std::f32::consts::PI / 2.0;
+        const N: usize = 32;
+        let path = Path::new(|p| {
+            let start = Point::new(center.x + r * start_rad.cos(), center.y + r * start_rad.sin());
+            p.move_to(start);
+            for i in 1..=N {
+                let angle = start_rad + (i as f32 / N as f32) * (end_rad - start_rad);
+                let pt = Point::new(center.x + r * angle.cos(), center.y + r * angle.sin());
+                p.line_to(pt);
+            }
+        });
+        frame.stroke(&path, Stroke::default().with_color(self.color).with_width(2.5));
+        vec![frame.into_geometry()]
+    }
+}
+
+/// Fixed row height for virtual list; used to compute visible range from scroll offset.
+const CHAPTER_ROW_HEIGHT: f32 = 56.0;
+/// Number of rows to render above/below viewport for smooth scrolling.
+const VISIBLE_BUFFER: usize = 4;
 
 pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
         use crate::ui::views::LecternView;
@@ -53,14 +60,14 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                 column![
                     text("Audiobook Lookup (Audnexus)")
                         .size(18)
-                        .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
+                        .style(iced::theme::Text::Color(app.palette().background.base.text)),
                     Space::with_height(Length::Fixed(10.0)),
                     row![
                         column![
-                            text("ASIN")
+                            text("ASIN or ISBN")
                                 .size(12)
-                                .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                            text_input("ASIN", &app.chapters.asin_input)
+                                .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                            text_input("ASIN or ISBN", &app.chapters.asin_input)
                                 .on_input(Message::ChapterAsinChanged)
                                 .padding(12),
                         ]
@@ -70,7 +77,7 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                         column![
                             text("Region")
                                 .size(12)
-                                .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                                .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                             iced::widget::pick_list(
                                 &crate::ui::state::ChapterRegion::ALL[..],
                                 Some(app.chapters.selected_region),
@@ -92,15 +99,25 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                     
                     checkbox("Remove Audible intro and outro from chapters", app.chapters.remove_audible_intro_outro)
                         .on_toggle(Message::ChapterRemoveAudibleToggled)
+                        .style(iced::theme::Checkbox::Custom(Box::new(crate::ui::theme::ThemedCheckbox(app.theme_id))))
                         .text_size(14),
 
-                    text(format!("Current book ASIN: {}", 
-                        app.metadata.selected_book.as_ref()
-                            .and_then(|b| b.asin.as_ref())
-                            .map(|a| a.as_str())
-                            .unwrap_or("None")))
-                        .size(11)
-                        .style(iced::theme::Text::Color(colors::TEXT_TERTIARY)),
+                    row![
+                        text(format!("Current book ASIN/ISBN: {}", 
+                            app.metadata.selected_book.as_ref()
+                                .and_then(|b| b.asin.as_ref().or(b.isbn.as_ref()))
+                                .map(|s| s.as_str())
+                                .unwrap_or("None")))
+                            .size(11)
+                            .style(iced::theme::Text::Color(app.palette().secondary.base.text)),
+                        Space::with_width(Length::Fill),
+                        button("Close")
+                            .on_press(Message::ChapterToggleAsinInput)
+                            .style(iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id)))
+                            .padding([8, 16]),
+                    ]
+                    .align_items(Alignment::Center)
+                    .spacing(10),
                 ]
                 .spacing(15),
             )
@@ -115,19 +132,23 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
         let mut controls_row = row![
             button("Extract from File")
                 .on_press(Message::ChapterExtractFromFile)
-                .style(iced::theme::Button::Primary)
+                .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
                 .padding([10, 15]),
             button("Lookup")
                 .on_press(Message::ChapterToggleAsinInput)
-                .style(if app.chapters.show_asin_input { iced::theme::Button::Primary } else { iced::theme::Button::Secondary })
+                .style(if app.chapters.show_asin_input {
+                    iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id))
+                } else {
+                    iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id))
+                })
                 .padding([10, 15]),
             button("Validate")
                 .on_press(Message::ChapterValidate)
-                .style(iced::theme::Button::Secondary)
+                .style(iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id)))
                 .padding([10, 15]),
             button("Remove All")
                 .on_press(Message::ChapterRemoveAll)
-                .style(iced::theme::Button::Destructive)
+                .style(iced::theme::Button::custom(crate::ui::theme::RoundedDestructive(app.theme_id)))
                 .padding([10, 15]),
         ];
         
@@ -142,71 +163,154 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
             controls_row = controls_row.push(
                 button(btn_label)
                     .on_press(Message::MapChaptersFromFiles)
-                    .style(iced::theme::Button::Primary)
+                    .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
                     .padding([10, 15])
             );
         }
         
-        // Add shift controls
+        // Shift all: single field (seconds, e.g. "-5" or "2.5") + Apply button
         let shift_controls: Element<Message> = if !app.chapters.chapters.is_empty() {
             row![
-                text("Shift all:")
+                text("Shift all (seconds):")
                     .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                button("-1s")
-                    .on_press(Message::ChapterShiftAll(-1000))
+                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                text_input("e.g. -5 or 2.5", &app.chapters.shift_all_input)
+                    .on_input(Message::ChapterShiftAmountChanged)
+                    .width(Length::Fixed(100.0))
+                    .padding(8),
+                button("Shift")
+                    .on_press(Message::ChapterShiftAllApply)
                     .style(iced::theme::Button::Secondary)
-                    .padding([5, 10]),
-                button("-5s")
-                    .on_press(Message::ChapterShiftAll(-5000))
-                    .style(iced::theme::Button::Secondary)
-                    .padding([5, 10]),
-                button("+5s")
-                    .on_press(Message::ChapterShiftAll(5000))
-                    .style(iced::theme::Button::Secondary)
-                    .padding([5, 10]),
-                button("+1s")
-                    .on_press(Message::ChapterShiftAll(1000))
-                    .style(iced::theme::Button::Secondary)
-                    .padding([5, 10]),
+                    .padding([8, 16]),
             ]
-            .spacing(8)
+            .spacing(10)
             .align_items(Alignment::Center)
             .into()
         } else {
             Space::with_height(Length::Fixed(0.0)).into()
         };
-        
+
+        // Duration: show "Duration found (Audible)" and "Your audiobook duration" when available
+        let lookup_duration_str = app.chapters.lookup_duration_ms
+            .map(|ms| format_time(ms, true));
+        let book_duration_str = app.chapters.book_duration_ms
+            .map(|ms| format_time(ms, true));
+        let duration_differ = match (app.chapters.lookup_duration_ms, app.chapters.book_duration_ms) {
+            (Some(a), Some(b)) => a != b,
+            _ => false,
+        };
+        let duration_text = match (&lookup_duration_str, &book_duration_str) {
+            (Some(ref aud), Some(ref yours)) => format!("Audible: {}  |  Yours: {}", aud, yours),
+            (Some(ref aud), None) => format!("Duration found (Audible): {}", aud),
+            (None, Some(ref yours)) => format!("Your audiobook duration: {}", yours),
+            (None, None) => String::new(),
+        };
         let top_controls = controls_row
             .push(Space::with_width(Length::Fill))
+            .push(if !duration_text.is_empty() {
+                Element::from(
+                    text(&duration_text)
+                        .size(12)
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                )
+            } else {
+                Space::with_width(Length::Fixed(0.0)).into()
+            })
             .push(checkbox("Show seconds", app.chapters.show_seconds)
                 .on_toggle(Message::ChaptersShowSecondsToggled)
+                .style(iced::theme::Checkbox::Custom(Box::new(crate::ui::theme::ThemedCheckbox(app.theme_id))))
                 .text_size(14))
             .spacing(12)
             .align_items(Alignment::Center);
+
+        // Warning when book end time differs from Audible
+        let duration_warning: Element<Message> = if duration_differ {
+            let (aud_ms, book_ms) = (app.chapters.lookup_duration_ms.unwrap(), app.chapters.book_duration_ms.unwrap());
+            let msg = if book_ms < aud_ms {
+                format!("Your audiobook duration ({}) is shorter than Audible ({}).", format_time(book_ms, true), format_time(aud_ms, true))
+            } else {
+                format!("Your audiobook duration ({}) is longer than Audible ({}).", format_time(book_ms, true), format_time(aud_ms, true))
+            };
+            container(
+                row![
+                    text("⚠ ")
+                        .size(14)
+                        .style(iced::theme::Text::Color(colors::WARNING)),
+                    text(msg)
+                        .size(14)
+                        .style(iced::theme::Text::Color(colors::WARNING)),
+                ]
+                .spacing(6)
+                .align_items(Alignment::Center),
+            )
+            .padding(10)
+            .style(iced::theme::Container::Box)
+            .into()
+        } else {
+            Space::with_height(Length::Fixed(0.0)).into()
+        };
+
+        // Pending lookup: Apply (replace) or Map titles only
+        let lookup_pending_section: Element<Message> = if let Some(ref lookup) = app.chapters.lookup_result {
+            let n = lookup.len();
+            container(
+                column![
+                    text(format!("Found {} chapters from Audible.", n))
+                        .size(14)
+                        .style(iced::theme::Text::Color(app.palette().background.base.text)),
+                    row![
+                        button("Apply")
+                            .on_press(Message::ChapterLookupApply)
+                            .style(iced::theme::Button::Primary)
+                            .padding([10, 16]),
+                        button("Map Chapter Titles")
+                            .on_press(Message::MapChapterTitlesOnly)
+                            .style(iced::theme::Button::Secondary)
+                            .padding([10, 16]),
+                    ]
+                    .spacing(12)
+                    .align_items(Alignment::Center),
+                    text("Apply replaces your chapters. Map Chapter Titles keeps your timestamps and applies these titles to your existing chapters (by index).")
+                        .size(12)
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                ]
+                .spacing(10),
+            )
+            .padding(15)
+            .style(iced::theme::Container::Box)
+            .into()
+        } else {
+            Space::with_height(Length::Fixed(0.0)).into()
+        };
         
-        // Chapter list header - styled as a table header
+        // Chapter list header - styled as a table header (error column for duration violation icon)
         let header = container(
             row![
                 text("#")
                     .width(Length::Fixed(50.0))
                     .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                Space::with_width(Length::Fixed(24.0)),
                 text("START")
-                    .width(Length::Fixed(150.0))
+                    .width(Length::Fixed(230.0))
                     .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                 text("TITLE")
                     .width(Length::Fill)
                     .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
-                checkbox("", app.chapters.global_locked)
-                    .on_toggle(|_| Message::ChaptersGlobalLockToggled)
-                    .width(Length::Fixed(30.0)),
+                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                tooltip(
+                    checkbox("", app.chapters.global_locked)
+                        .on_toggle(|_| Message::ChaptersGlobalLockToggled)
+                        .style(iced::theme::Checkbox::Custom(Box::new(crate::ui::theme::ThemedCheckbox(app.theme_id))))
+                        .width(Length::Fixed(30.0)),
+                    text("Lock/unlock all chapters"),
+                    Position::Bottom,
+                ),
                 text("Actions")
                     .width(Length::Fixed(320.0))
                     .size(12)
-                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
             ]
             .spacing(10)
             .align_items(Alignment::Center)
@@ -226,8 +330,21 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
             .into()
         } else {
             let mut chapter_list = Column::new();
-            let icons = load_chapter_icons(); // Load icons once for all chapters
-            for (index, chapter) in app.chapters.chapters.iter().enumerate() {
+            let icons = if app.palette().is_dark { &app.chapter_icons_dark } else { &app.chapter_icons_light };
+            let total = app.chapters.chapters.len();
+            // Virtual list: only render rows in viewport + buffer to avoid cosmic-text overflow.
+            let (start, end) = if let Some((offset_y, viewport_height, _)) = app.chapters.chapter_list_viewport {
+                let start_row = (offset_y / CHAPTER_ROW_HEIGHT).floor() as usize;
+                let end_row = ((offset_y + viewport_height) / CHAPTER_ROW_HEIGHT).ceil() as usize;
+                let start = start_row.saturating_sub(VISIBLE_BUFFER).min(total);
+                let end = (end_row + VISIBLE_BUFFER).min(total).max(start);
+                (start, end)
+            } else {
+                (0, (30 + VISIBLE_BUFFER * 2).min(total))
+            };
+            chapter_list = chapter_list.push(Space::with_height(Length::Fixed(start as f32 * CHAPTER_ROW_HEIGHT)));
+            for index in start..end {
+                let chapter = &app.chapters.chapters[index];
                 let time_str = format_time(chapter.start_time, app.chapters.show_seconds);
                 let chapter_index = index;
                 let is_locked = chapter.is_locked;
@@ -242,25 +359,47 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                     .map(|s| s.chapter_index == chapter_index && s.is_playing)
                     .unwrap_or(false);
                 
-                // Time input - clickable during playback to set to current playback position
-                let time_input: Element<Message> = if is_currently_playing_for_time {
-                    // During playback, make the time display clickable to set to current position
-                    button(text(format!("{} (click to set)", time_str)))
-                        .width(Length::Fixed(120.0))
-                        .on_press(Message::ChapterSetTimeFromPlayback(chapter_index))
-                        .style(iced::theme::Button::Text)
+                // Time input - when locked read-only; during playback show time + separate "Set" button to avoid accidental overwrite
+                let time_input: Element<Message> = if is_locked {
+                    text(&time_str)
+                        .width(Length::Fixed(110.0))
+                        .size(14)
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text))
                         .into()
+                } else if is_currently_playing_for_time {
+                    row![
+                        text(&time_str)
+                            .width(Length::Fixed(90.0))
+                            .size(14)
+                            .style(iced::theme::Text::Color(app.palette().background.base.text)),
+                        button("Set")
+                            .on_press(Message::ChapterSetTimeFromPlayback(chapter_index))
+                            .style(iced::theme::Button::Text)
+                            .padding([4, 8]),
+                    ]
+                    .spacing(6)
+                    .align_items(Alignment::Center)
+                    .into()
                 } else {
-                    // Normal text input when not playing - use editing value if available, otherwise formatted time
                     text_input("HH:MM:SS", &current_editing_value)
-                        .width(Length::Fixed(120.0))
+                        .width(Length::Fixed(110.0))
                         .on_input(move |s| Message::ChapterTimeChanged(chapter_index, s))
                         .into()
                 };
-                
-                let title_input = text_input("Chapter title", &chapter.title)
-                    .width(Length::Fill)
-                    .on_input(move |s| Message::ChapterTitleChanged(chapter_index, s));
+
+                // Title: when locked read-only text; otherwise editable
+                let title_input: Element<Message> = if is_locked {
+                    text(&chapter.title)
+                        .width(Length::Fill)
+                        .size(14)
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text))
+                        .into()
+                } else {
+                    text_input("Chapter title", &chapter.title)
+                        .width(Length::Fill)
+                        .on_input(move |s| Message::ChapterTitleChanged(chapter_index, s))
+                        .into()
+                };
                 
                 // Check if this chapter is currently playing
                 let is_currently_playing = app.chapter_playback_state.as_ref()
@@ -273,98 +412,190 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                                 let insert_icon = icons.get("insert");
                                 let play_icon = icons.get("play");
                                 let stop_icon = icons.get("stop");
+                                let remove_icon = icons.get("remove");
+                                let add_icon = icons.get("add");
+                                let error_icon = icons.get("error");
+                                let chapter_exceeds_duration = app.chapters.book_duration_ms
+                                    .map(|d| chapter.start_time >= d)
+                                    .unwrap_or(false);
                 
+                // -1s / +1s buttons: when locked show inert icon (no on_press); otherwise editable
+                let minus_btn: Element<Message> = if is_locked {
+                    let content: Element<Message> = if let Some(h) = remove_icon {
+                        Image::new(h.clone()).width(Length::Fixed(20.0)).height(Length::Fixed(20.0)).into()
+                    } else {
+                        text("-").size(14).into()
+                    };
+                    container(content)
+                        .width(Length::Fixed(28.0))
+                        .padding(5)
+                        .center_x()
+                        .center_y()
+                        .into()
+                } else if let Some(h) = remove_icon {
+                    button(Image::new(h.clone()).width(Length::Fixed(20.0)).height(Length::Fixed(20.0)))
+                        .on_press(Message::ChapterTimeAdjusted(chapter_index, -1))
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Fixed(28.0))
+                        .padding(5)
+                        .into()
+                } else {
+                    button("-")
+                        .on_press(Message::ChapterTimeAdjusted(chapter_index, -1))
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Fixed(28.0))
+                        .padding(5)
+                        .into()
+                };
+                let plus_btn: Element<Message> = if is_locked {
+                    let content: Element<Message> = if let Some(h) = add_icon {
+                        Image::new(h.clone()).width(Length::Fixed(20.0)).height(Length::Fixed(20.0)).into()
+                    } else {
+                        text("+").size(14).into()
+                    };
+                    container(content)
+                        .width(Length::Fixed(28.0))
+                        .padding(5)
+                        .center_x()
+                        .center_y()
+                        .into()
+                } else if let Some(h) = add_icon {
+                    button(Image::new(h.clone()).width(Length::Fixed(20.0)).height(Length::Fixed(20.0)))
+                        .on_press(Message::ChapterTimeAdjusted(chapter_index, 1))
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Fixed(28.0))
+                        .padding(5)
+                        .into()
+                } else {
+                    button("+")
+                        .on_press(Message::ChapterTimeAdjusted(chapter_index, 1))
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Fixed(28.0))
+                        .padding(5)
+                        .into()
+                };
+
+                // Delete button: when locked show inert icon (no on_press); otherwise remove chapter
+                let delete_btn: Element<Message> = if is_locked {
+                    let content: Element<Message> = if let Some(icon_handle) = delete_icon {
+                        Image::new(icon_handle.clone())
+                            .width(Length::Fixed(20.0))
+                            .height(Length::Fixed(20.0))
+                            .into()
+                    } else {
+                        text("🗑").size(14).into()
+                    };
+                    tooltip(
+                        container(content)
+                            .width(Length::Fixed(40.0))
+                            .padding(5)
+                            .center_x()
+                            .center_y(),
+                        text("locked – unlock to remove"),
+                        Position::Bottom,
+                    )
+                    .into()
+                } else {
+                    let btn: Element<Message> = if let Some(icon_handle) = delete_icon {
+                        button(
+                            Image::new(icon_handle.clone())
+                                .width(Length::Fixed(20.0))
+                                .height(Length::Fixed(20.0))
+                        )
+                        .on_press(Message::ChapterDelete(chapter_index))
+                        .width(Length::Fixed(40.0))
+                        .padding(5)
+                        .style(iced::theme::Button::Text)
+                        .into()
+                    } else {
+                        button("🗑")
+                            .on_press(Message::ChapterDelete(chapter_index))
+                            .width(Length::Fixed(40.0))
+                            .padding(5)
+                            .style(iced::theme::Button::Text)
+                            .into()
+                    };
+                    tooltip(btn, text("remove chapter"), Position::Bottom).into()
+                };
+
+                // Error icon when chapter start is after book end
+                let error_indicator: Element<Message> = if chapter_exceeds_duration {
+                    if let Some(h) = error_icon {
+                        Element::from(
+                            Image::new(h.clone())
+                                .width(Length::Fixed(20.0))
+                                .height(Length::Fixed(20.0)),
+                        )
+                    } else {
+                        text("!").size(12).style(iced::theme::Text::Color(app.palette().danger.base.color)).into()
+                    }
+                } else {
+                    Space::with_width(Length::Fixed(8.0)).into()
+                };
+
                 chapter_list = chapter_list.push(
                     row![
                         text(format!("#{}", index + 1))
                             .width(Length::Fixed(50.0))
                             .size(14),
+                        error_indicator,
                         row![
-                            button("-")
-                                .on_press(Message::ChapterTimeAdjusted(chapter_index, -1))
-                                .style(iced::theme::Button::Secondary)
-                                .width(Length::Fixed(35.0))
-                                .padding(5),
+                            tooltip(minus_btn, text("-1 second"), Position::Bottom),
                             time_input,
-                            button("+")
-                                .on_press(Message::ChapterTimeAdjusted(chapter_index, 1))
-                                .style(iced::theme::Button::Secondary)
-                                .width(Length::Fixed(35.0))
-                                .padding(5),
+                            tooltip(plus_btn, text("+1 second"), Position::Bottom),
                         ]
-                        .spacing(8)
-                        .width(Length::Fixed(150.0)),
+                        .spacing(4)
+                        .width(Length::Fixed(210.0)),
                         title_input,
-                        checkbox("", is_locked)
-                            .on_toggle(move |_| Message::ChapterLockToggled(chapter_index))
-                            .width(Length::Fixed(30.0)),
                         row![
-                            // Lock/Unlock button - using PNG icon
-                            if let Some(icon_handle) = lock_icon {
-                                button(
-                                    Image::new(icon_handle.clone())
-                                        .width(Length::Fixed(20.0))
-                                        .height(Length::Fixed(20.0))
-                                )
-                                .on_press(Message::ChapterLockToggled(chapter_index))
-                                .width(Length::Fixed(40.0))
-                                .padding(5)
-                                .style(if is_locked {
-                                    iced::theme::Button::Primary
-                                } else {
-                                    iced::theme::Button::Secondary
-                                })
-                            } else {
-                                button(if is_locked { "🔒" } else { "🔓" })
+                            // Lock/Unlock with tooltip
+                            tooltip(
+                                Element::from(if let Some(icon_handle) = lock_icon {
+                                    button(
+                                        Image::new(icon_handle.clone())
+                                            .width(Length::Fixed(20.0))
+                                            .height(Length::Fixed(20.0))
+                                    )
                                     .on_press(Message::ChapterLockToggled(chapter_index))
                                     .width(Length::Fixed(40.0))
                                     .padding(5)
-                                    .style(if is_locked {
-                                        iced::theme::Button::Primary
-                                    } else {
-                                        iced::theme::Button::Secondary
-                                    })
-                            },
-                            // Delete button
-                            if let Some(icon_handle) = delete_icon {
-                                button(
-                                    Image::new(icon_handle.clone())
-                                        .width(Length::Fixed(20.0))
-                                        .height(Length::Fixed(20.0))
-                                )
-                                .on_press(Message::ChapterDelete(chapter_index))
-                                .width(Length::Fixed(40.0))
-                                .padding(5)
-                                .style(iced::theme::Button::Destructive)
-                            } else {
-                                button("🗑")
-                                    .on_press(Message::ChapterDelete(chapter_index))
-                                    .width(Length::Fixed(40.0))
-                                    .padding(5)
-                                    .style(iced::theme::Button::Destructive)
-                            },
-                            // Insert below button
-                            if let Some(icon_handle) = insert_icon {
-                                button(
-                                    Image::new(icon_handle.clone())
-                                        .width(Length::Fixed(20.0))
-                                        .height(Length::Fixed(20.0))
-                                )
-                                .on_press(Message::ChapterInsertBelow(chapter_index))
-                                .width(Length::Fixed(40.0))
-                                .padding(5)
-                                .style(iced::theme::Button::Secondary)
-                            } else {
-                                button("➕")
+                                    .style(iced::theme::Button::Text)
+                                } else {
+                                    button(if is_locked { "🔒" } else { "🔓" })
+                                        .on_press(Message::ChapterLockToggled(chapter_index))
+                                        .width(Length::Fixed(40.0))
+                                        .padding(5)
+                                        .style(iced::theme::Button::Text)
+                                }),
+                                text(if is_locked { "Unlock chapter (Shift+click for range)" } else { "Lock chapter (Shift+click for range)" }),
+                                Position::Bottom,
+                            ),
+                            delete_btn,
+                            tooltip(
+                                Element::from(if let Some(icon_handle) = insert_icon {
+                                    button(
+                                        Image::new(icon_handle.clone())
+                                            .width(Length::Fixed(20.0))
+                                            .height(Length::Fixed(20.0))
+                                    )
                                     .on_press(Message::ChapterInsertBelow(chapter_index))
                                     .width(Length::Fixed(40.0))
                                     .padding(5)
-                                    .style(iced::theme::Button::Secondary)
-                            },
-                            // Play/Stop button with timer - shows current state
+                                    .style(iced::theme::Button::Text)
+                                } else {
+                                    button("➕")
+                                        .on_press(Message::ChapterInsertBelow(chapter_index))
+                                        .width(Length::Fixed(40.0))
+                                        .padding(5)
+                                        .style(iced::theme::Button::Text)
+                                }),
+                                text("add chapter below"),
+                                Position::Bottom,
+                            ),
+                            // Play/Stop button with timer (no colored square)
+                            tooltip(
                             row![
                                 if is_currently_playing {
-                                    // Show stop icon when playing
                                     if let Some(icon_handle) = stop_icon {
                                         button(
                                             Image::new(icon_handle.clone())
@@ -374,13 +605,13 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                                         .on_press(Message::ChapterStopPlayback)
                                         .width(Length::Fixed(40.0))
                                         .padding(5)
-                                        .style(iced::theme::Button::Primary)
+                                        .style(iced::theme::Button::Text)
                                     } else {
                                         button("⏹")
                                             .on_press(Message::ChapterStopPlayback)
                                             .width(Length::Fixed(40.0))
                                             .padding(5)
-                                            .style(iced::theme::Button::Primary)
+                                            .style(iced::theme::Button::Text)
                                     }
                                 } else if let Some(icon_handle) = play_icon {
                                     button(
@@ -391,15 +622,15 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                                     .on_press(Message::ChapterPlay(chapter_index))
                                     .width(Length::Fixed(40.0))
                                     .padding(5)
-                                    .style(iced::theme::Button::Primary)
+                                    .style(iced::theme::Button::Text)
                                 } else {
                                     button("▶")
                                         .on_press(Message::ChapterPlay(chapter_index))
                                         .width(Length::Fixed(40.0))
                                         .padding(5)
-                                        .style(iced::theme::Button::Primary)
+                                        .style(iced::theme::Button::Text)
                                 },
-                                // Timer display - shows elapsed time when playing
+                                // Timer display - only visible when this chapter is playing
                                 if is_currently_playing {
                                     if let Some(ref state) = app.chapter_playback_state {
                                         let elapsed_sec = state.elapsed_ms / 1000;
@@ -410,25 +641,24 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                                             let seconds = elapsed_sec % 60;
                                             format!("{}m {}s", minutes, seconds)
                                         };
-                                        text(timer_text)
-                                            .size(12)
-                                            .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
-                                            .width(Length::Fixed(50.0))
+                                        Element::from(
+                                            text(timer_text)
+                                                .size(12)
+                                                .style(iced::theme::Text::Color(app.palette().background.weak.text))
+                                                .width(Length::Fixed(50.0)),
+                                        )
                                     } else {
-                                        text("0s")
-                                            .size(12)
-                                            .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
-                                            .width(Length::Fixed(50.0))
+                                        Element::from(Space::with_width(Length::Fixed(50.0)))
                                     }
                                 } else {
-                                    text("0s")
-                                        .size(12)
-                                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
-                                        .width(Length::Fixed(50.0))
+                                    Element::from(Space::with_width(Length::Fixed(50.0)))
                                 },
                             ]
                             .spacing(5)
                             .align_items(Alignment::Center),
+                            text("playback button"),
+                            Position::Bottom,
+                            ),
                         ]
                         .spacing(8)
                         .width(Length::Fixed(370.0)),
@@ -437,14 +667,55 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                     .padding(10)
                 );
             }
-            chapter_list.spacing(5).into()
+            chapter_list = chapter_list.push(Space::with_height(Length::Fixed((total - end) as f32 * CHAPTER_ROW_HEIGHT)));
+            let total_height = total as f32 * CHAPTER_ROW_HEIGHT;
+            let scroll_content = container(chapter_list.spacing(5))
+                .width(Length::Fill)
+                .height(Length::Fixed(total_height));
+            scrollable(scroll_content)
+                .id(scrollable::Id::new("chapter_list"))
+                .on_scroll(move |v| {
+                    let abs = v.absolute_offset();
+                    Message::ChapterListViewportChanged {
+                        offset_y: abs.y,
+                        viewport_height: v.bounds().height,
+                        content_height: v.content_bounds().height,
+                    }
+                })
+                .height(Length::Fill)
+                .into()
         };
         
+        // Loading indicator: spinning arc (canvas) when mapping or looking up
+        let loading_icon: Element<Message> = {
+            let color = app.palette().primary.base.color;
+            Canvas::new(SpinnerProgram {
+                rotation_degrees: app.chapters.loading_spinner_rotation,
+                color,
+            })
+            .width(Length::Fixed(24.0))
+            .height(Length::Fixed(24.0))
+            .into()
+        };
         // Status messages and playback timer
-        let status = if app.chapters.is_looking_up_chapters {
-            text("Looking up chapters...").size(14)
+        let status: Element<Message> = if app.chapters.is_mapping_from_files {
+            row![
+                loading_icon,
+                Space::with_width(Length::Fixed(8.0)),
+                text("Mapping chapters from files...").size(14),
+            ]
+            .align_items(Alignment::Center)
+            .into()
+        } else if app.chapters.is_looking_up_chapters {
+            row![
+                loading_icon,
+                Space::with_width(Length::Fixed(8.0)),
+                text("Looking up chapters...").size(14),
+            ]
+            .align_items(Alignment::Center)
+            .into()
         } else if let Some(ref error) = app.chapters.lookup_error {
-            text(format!("Error: {}", error)).size(14)
+            text(format!("Error: {}", error)).size(14).into()
         } else {
             let mut status_text = format!("{} chapters", app.chapters.chapters.len());
             
@@ -459,30 +730,29 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                 }
             }
             
-            text(status_text).size(14)
+            text(status_text).size(14).into()
         };
         
+        // Layout: fixed top (tabs, ASIN, controls, shift, header), scrollable list only, fixed bottom (status).
+        // No extra padding on this column so the tab bar stays in the same position as on other tabs.
         container(
             column![
                 tab_bar,
-                Space::with_height(Length::Fixed(15.0)),
-                scrollable(
-                    column![
-                        asin_input_section,
-                        Space::with_height(Length::Fixed(10.0)),
-                        top_controls,
-                        shift_controls,
-                        Space::with_height(Length::Fixed(10.0)),
-                        header,
-                        chapter_list_content,
-                        Space::with_height(Length::Fixed(10.0)),
-                        status,
-                    ]
-                    .spacing(10)
-                    .padding(20),
-                )
+                Space::with_height(Length::Fixed(6.0)),
+                asin_input_section,
+                Space::with_height(Length::Fixed(6.0)),
+                top_controls,
+                duration_warning,
+                lookup_pending_section,
+                shift_controls,
+                Space::with_height(Length::Fixed(6.0)),
+                header,
+                chapter_list_content,
+                Space::with_height(Length::Fixed(6.0)),
+                status,
             ]
-            .spacing(10),
+            .spacing(6)
+            .height(Length::Fill),
         )
         .width(Length::Fill)
         .height(Length::Fill)

@@ -1,11 +1,39 @@
 use crate::ui::{Lectern, Message};
-use crate::ui::helpers::{parse_audiobook_file, get_audio_files_from_directory};
+use crate::ui::helpers::{parse_audiobook_file, get_audio_files_from_directory, find_local_cover_in_directory, find_metadata_or_chapter_files};
 use crate::ui::cover_search::download_image;
+use crate::ui::views::ViewMode;
+use crate::ui::state::CoverState;
+use crate::utils::chapter_file::{parse_chapters_from_path, is_chapter_file_name};
+use crate::services::ffprobe::{extract_chapters_from_file, generate_chapters_from_files};
 use std::path::Path;
 use iced::Command;
 
 pub fn handle_file(app: &mut Lectern, message: Message) -> Option<Command<Message>> {
     match message {
+        Message::CloseBook => {
+            app.metadata.selected_book = None;
+            app.file.selected_file_path = None;
+            app.file.audio_file_paths.clear();
+            app.file.found_metadata_chapter_files.clear();
+            app.file.file_parse_error = None;
+            // Stop any in-flight chapter loading and wipe chapter state
+            app.chapters.is_mapping_from_files = false;
+            app.chapters.is_looking_up_chapters = false;
+            app.chapters.chapters.clear();
+            app.chapters.lookup_error = None;
+            app.chapters.book_duration_ms = None;
+            app.chapters.chapter_time_editing.clear();
+            app.chapters.lookup_result = None;
+            app.chapters.lookup_duration_ms = None;
+            app.chapters.load_generation = app.chapters.load_generation.wrapping_add(1);
+            // Wipe cover state for the previous book
+            app.cover = CoverState::default();
+            // Stop chapter playback if running
+            app.chapter_playback_state = None;
+            let _ = app.chapter_playback_process.take();
+            app.view_mode = ViewMode::Metadata;
+            Some(Command::none())
+        }
         Message::BrowseFiles => {
             Some(Command::perform(async move {
                 let (tx, rx) = futures::channel::oneshot::channel();
@@ -251,20 +279,130 @@ pub fn handle_file(app: &mut Lectern, message: Message) -> Option<Command<Messag
                 app.cover.cover_image_handle = None;
                 app.cover.cover_image_url_cached = None;
             }
+            app.chapters.book_duration_ms = None;
+            println!("[DEBUG] FileParsed - Switching to Metadata view");
+            app.view_mode = crate::ui::views::ViewMode::Metadata;
+            // If directory and no cover from metadata, look for local cover (folder.jpg, cover.jpg, etc.)
+            if app.cover.cover_image_handle.is_none() {
+                if let Some(ref file_path) = app.file.selected_file_path {
+                    if Path::new(file_path).is_dir() {
+                        if let Some(local_cover) = find_local_cover_in_directory(file_path) {
+                            app.cover.cover_image_path = Some(local_cover.clone());
+                            app.cover.cover_image_data = None;
+                            app.cover.cover_image_url_cached = None;
+                            let path = std::path::Path::new(&local_cover);
+                            if path.exists() {
+                                if let Ok(img_data) = std::fs::read(path) {
+                                    if let Ok(img) = ::image::load_from_memory(&img_data) {
+                                        let rgba = img.to_rgba8();
+                                        let (width, height) = rgba.dimensions();
+                                        let pixels: Vec<u8> = rgba.into_raw();
+                                        app.cover.cover_image_handle = Some(iced::widget::image::Handle::from_pixels(width, height, pixels));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
-            // Store audio file paths if directory was selected
+            // Store audio file paths and scan for metadata/chapter files if directory was selected
             if let Some(ref file_path) = app.file.selected_file_path {
                 if Path::new(file_path).is_dir() {
                     let audio_files = get_audio_files_from_directory(file_path);
                     app.file.audio_file_paths = audio_files;
-                    println!("[DEBUG] Stored {} audio file paths for chapter mapping", app.file.audio_file_paths.len());
+                    app.file.found_metadata_chapter_files = find_metadata_or_chapter_files(file_path);
+                    println!("[DEBUG] Stored {} audio file paths, {} metadata/chapter files", app.file.audio_file_paths.len(), app.file.found_metadata_chapter_files.len());
+                    if !app.file.found_metadata_chapter_files.is_empty() {
+                        let names: Vec<&str> = app.file.found_metadata_chapter_files.iter().map(|(n, _)| n.as_str()).collect();
+                        println!("[DEBUG] Found in folder: {}", names.join(", "));
+                    }
+
+                    // Auto-load chapters from a chapter file in the directory (txt, json, cue, ini)
+                    for (name, path) in &app.file.found_metadata_chapter_files {
+                        if is_chapter_file_name(name) {
+                            if let Ok(chapters) = parse_chapters_from_path(path) {
+                                if !chapters.is_empty() {
+                                    app.chapters.chapters = chapters;
+                                    app.chapters.lookup_error = None;
+                                    println!("[DEBUG] Loaded {} chapters from file {}", app.chapters.chapters.len(), name);
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 } else {
                     app.file.audio_file_paths.clear();
+                    app.file.found_metadata_chapter_files.clear();
+
+                    // Auto-extract chapters from single file (e.g. M4B with embedded chapters)
+                    app.chapters.is_looking_up_chapters = true;
+                    app.chapters.lookup_error = None;
+                    let path_clone = file_path.clone();
+                    let gen = app.chapters.load_generation;
+                    return Some(Command::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                extract_chapters_from_file(&path_clone).map_err(|e| e.to_string())
+                            })
+                            .await
+                            .unwrap_or_else(|_| Err("Task join error".to_string()))
+                        },
+                        move |result| Message::ChapterExtractCompleted(gen, result),
+                    ));
                 }
             }
-            
-            println!("[DEBUG] FileParsed - Switching to Metadata view");
-            app.view_mode = crate::ui::views::ViewMode::Metadata;
+
+            // If directory with audio files but no chapters yet, auto-map one chapter per file
+            let need_duration = !app.file.audio_file_paths.is_empty();
+            let need_map_chapters = need_duration && app.chapters.chapters.is_empty();
+            if need_map_chapters {
+                app.chapters.is_mapping_from_files = true;
+                app.chapters.lookup_error = None;
+                let paths = app.file.audio_file_paths.clone();
+                let gen = app.chapters.load_generation;
+                let map_cmd = Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            generate_chapters_from_files(&paths).map_err(|e| e.to_string())
+                        })
+                        .await
+                        .unwrap_or_else(|_| Err("Task failed".to_string()))
+                    },
+                    move |result| Message::MapChaptersFromFilesCompleted(gen, result),
+                );
+                if need_duration {
+                    let duration_paths = app.file.audio_file_paths.clone();
+                    let duration_gen = app.chapters.load_generation;
+                    let duration_cmd = Command::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                crate::services::conversion::get_total_duration(&duration_paths).map_err(|e| e.to_string())
+                            })
+                            .await
+                            .unwrap_or(Err("Task failed".into()))
+                        },
+                        move |result| Message::BookDurationComputed(duration_gen, result),
+                    );
+                    return Some(Command::batch([duration_cmd, map_cmd]));
+                }
+                return Some(map_cmd);
+            }
+            // Compute total book duration in background (for chapters validation)
+            if need_duration {
+                let paths = app.file.audio_file_paths.clone();
+                let duration_gen = app.chapters.load_generation;
+                return Some(Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            crate::services::conversion::get_total_duration(&paths).map_err(|e| e.to_string())
+                        })
+                        .await
+                        .unwrap_or(Err("Task failed".into()))
+                    },
+                    move |result| Message::BookDurationComputed(duration_gen, result),
+                ));
+            }
             Some(Command::none())
         }
         Message::FileParsed(Err(e)) => {

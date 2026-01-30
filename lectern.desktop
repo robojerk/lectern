@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Lectern
+Comment=Audiobook Preparation Tool for Audiobookshelf
+Exec=sh -c 'unset WAYLAND_DISPLAY; exec lectern'
+Icon=lectern
+Categories=AudioVideo;Audio;
+Terminal=false
+StartupNotify=true

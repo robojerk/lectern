@@ -1,5 +1,5 @@
 use crate::ui::{Lectern, Message};
-use crate::ui::cover_search::{search_cover_art, download_image};
+use crate::ui::cover_search::{search_cover_art, download_image, download_images_parallel_threaded};
 use crate::ui::views::ViewMode;
 use iced::Command;
 
@@ -49,6 +49,7 @@ pub fn handle_cover(app: &mut Lectern, message: Message) -> Option<Command<Messa
             app.cover.is_searching_cover = true;
             app.cover.cover_search_error = None;
             app.cover.cover_search_results.clear();
+            app.cover.cover_search_result_handles.clear();
             
             let title = app.metadata.editing_title.clone();
             let author = app.metadata.editing_author.clone();
@@ -76,9 +77,43 @@ pub fn handle_cover(app: &mut Lectern, message: Message) -> Option<Command<Messa
         }
         Message::CoverSearchCompleted(Ok(results)) => {
             app.cover.is_searching_cover = false;
-            app.cover.cover_search_results = results;
+            app.cover.cover_search_results = results.clone();
             println!("[DEBUG] Cover search completed: {} results displayed", app.cover.cover_search_results.len());
-            Some(Command::none())
+
+            let urls: Vec<String> = results
+                .into_iter()
+                .map(|r| r.url)
+                .filter(|u| u.starts_with("http://") || u.starts_with("https://"))
+                .collect();
+            if urls.is_empty() {
+                return Some(Command::none());
+            }
+            Some(Command::perform(
+                async move {
+                    let join_handle = download_images_parallel_threaded(urls);
+                    let results = join_handle.join().unwrap_or_else(|_| vec![]);
+                    results
+                        .into_iter()
+                        .map(|(url, res)| {
+                            let handle = match res {
+                                Ok(data) => {
+                                    if let Ok(img) = ::image::load_from_memory(&data) {
+                                        let rgba = img.to_rgba8();
+                                        let (width, height) = rgba.dimensions();
+                                        let pixels: Vec<u8> = rgba.into_raw();
+                                        Ok(iced::widget::image::Handle::from_pixels(width, height, pixels))
+                                    } else {
+                                        Err("Failed to decode image".to_string())
+                                    }
+                                }
+                                Err(e) => Err(e),
+                            };
+                            (url, handle)
+                        })
+                        .collect::<Vec<_>>()
+                },
+                Message::CoverSearchResultsImagesDownloaded,
+            ))
         }
         Message::CoverSearchCompleted(Err(e)) => {
             app.cover.is_searching_cover = false;
@@ -221,6 +256,14 @@ pub fn handle_cover(app: &mut Lectern, message: Message) -> Option<Command<Messa
             app.cover.is_downloading_cover = false;
             println!("[DEBUG] Failed to download cover image: {}", e);
             app.cover.cover_search_error = Some(format!("Failed to download image: {}", e));
+            Some(Command::none())
+        }
+        Message::CoverSearchResultsImagesDownloaded(results) => {
+            for (url, res) in results {
+                if let Ok(handle) = res {
+                    app.cover.cover_search_result_handles.insert(url, handle);
+                }
+            }
             Some(Command::none())
         }
         Message::SwitchToCover => {

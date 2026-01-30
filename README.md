@@ -4,7 +4,7 @@ An Iced-based desktop application for preparing audiobooks for Audiobookshelf se
 
 ## Features
 
-✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app  
+✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app
 ✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information  
 ✅ **Editable Metadata** - Review and modify title, author, series, and narrator  
 ✅ **Chapter Management** - Create, edit, and manage chapter markers with playback preview  
@@ -102,6 +102,17 @@ After testing, you can install for system-wide access:
 ```bash
 sudo cp target/release/lectern /usr/local/bin/
 ```
+
+### AppImage (Portable)
+
+An AppImage is available for easy distribution. See [APPDIRECTORY.md](APPDIRECTORY.md) for build instructions.
+
+To use a pre-built AppImage:
+1. Download the `.AppImage` file
+2. Make it executable: `chmod +x Lectern-*.AppImage`
+3. Run it: `./Lectern-*.AppImage`
+
+The AppImage bundles all dependencies including FFmpeg, so no system installation is required.
 
 ## How It Works
 

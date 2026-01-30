@@ -1,5 +1,6 @@
-mod services;
+mod config;
 mod models;
+mod services;
 mod ui;
 mod utils;
 

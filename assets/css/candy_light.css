@@ -1,0 +1,88 @@
+/**
+ * Candy-Inspired KDE Plasma Dark Theme CSS
+ * Playful dark mode with candy-colored accents (pink, purple, teal).
+ * Inspired by Candy icons + Sweet KDE dark variants.
+ */
+
+ :root {
+    /* Backgrounds & surfaces */
+    --candy-background: #1a1b26;       /* Deep dark base */
+    --candy-surface: #24283b;          /* Cards, panels */
+    --candy-surface-alt: #292e42;      /* Alternate / subtle */
+    --candy-hover: #334155;            /* Hover states */
+    --candy-active: #3b4261;           /* Selected / active */
+  
+    /* Text & foreground */
+    --candy-text: #c0caf5;             /* Primary text (soft blue-white) */
+    --candy-text-secondary: #a9b1d6;   /* Secondary / dimmed */
+    --candy-text-muted: #565f89;
+  
+    /* Candy accents – vibrant pops */
+    --candy-accent: #f06292;           /* Hot pink – main buttons/links */
+    --candy-accent-hover: #ec4899;
+    --candy-accent-active: #db2777;
+    --candy-teal: #2dd4bf;             /* Teal secondary accent */
+    --candy-purple: #c084fc;           /* Purple highlight */
+  
+    /* Borders & shadows */
+    --candy-border: #334155;
+    --candy-shadow: rgba(0, 0, 0, 0.35);
+  
+    /* Semantic aliases */
+    --background: var(--candy-background);
+    --surface: var(--candy-surface);
+    --surface-hover: var(--candy-hover);
+    --text-primary: var(--candy-text);
+    --text-secondary: var(--candy-text-secondary);
+    --accent: var(--candy-accent);
+    --border: var(--candy-border);
+  }
+  
+  /* Basic usage example */
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    font-family: system-ui, sans-serif;
+    margin: 0;
+    padding: 1rem;
+  }
+  
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; /* Candy themes love rounded corners */
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px var(--candy-shadow);
+    transition: all 0.2s ease;
+  }
+  
+  .card:hover {
+    background: var(--surface-hover);
+    transform: translateY(-2px);
+  }
+  
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.7rem 1.4rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  
+  button:hover {
+    background: var(--candy-accent-hover);
+    box-shadow: 0 0 15px rgba(240, 98, 146, 0.4); /* Glowy candy effect */
+  }
+  
+  a {
+    color: var(--candy-teal);
+    text-decoration: none;
+  }
+  
+  a:hover {
+    color: var(--candy-purple);
+    text-decoration: underline;
+  }

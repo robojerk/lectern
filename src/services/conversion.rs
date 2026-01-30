@@ -602,7 +602,7 @@ pub async fn build_ffmpeg_command(config: &ConversionConfig, temp_dir: &TempDir)
         } else if let Some(ref params) = input_params {
             // Match input bitrate if available, otherwise default to a sensible value
             if let Some(br) = params.bitrate {
-                cmd.arg("-b:a").arg(format!("{}b", br));
+                cmd.arg("-b:a").arg(br.to_string());
             } else {
                 cmd.arg("-b:a").arg("128k");
             }

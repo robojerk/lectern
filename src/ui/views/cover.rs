@@ -1,5 +1,4 @@
 use crate::ui::{Message, Lectern};
-use crate::ui::colors;
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Column, Space, image};
 use iced::{Alignment, Element, Length};
 
@@ -125,17 +124,17 @@ pub fn view_cover(app: &Lectern) -> Element<'_, Message> {
         let cover_search_section = column![
             text("Search for Cover Art")
                 .size(18)
-                .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
+                .style(iced::theme::Text::Color(app.palette().background.base.text)),
             Space::with_height(Length::Fixed(10.0)),
             row![
                 button("Search Cover")
                     .on_press(Message::SearchCover)
-                    .style(iced::theme::Button::Primary)
+                    .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
                     .padding([12, 20]),
                 if app.cover.is_searching_cover {
                     text("Searching...")
                         .size(14)
-                        .style(iced::theme::Text::Color(colors::TEXT_SECONDARY))
+                        .style(iced::theme::Text::Color(app.palette().background.weak.text))
                 } else {
                     text("")
                 },
@@ -145,7 +144,7 @@ pub fn view_cover(app: &Lectern) -> Element<'_, Message> {
             if let Some(ref error) = app.cover.cover_search_error {
                 text(format!("Error: {}", error))
                     .size(14)
-                    .style(iced::theme::Text::Color(colors::ERROR))
+                    .style(iced::theme::Text::Color(app.palette().danger.base.color))
             } else {
                 text("").size(14)
             },
@@ -158,24 +157,40 @@ pub fn view_cover(app: &Lectern) -> Element<'_, Message> {
             cover_results_column = cover_results_column.push(
                 text(format!("Found {} cover results:", app.cover.cover_search_results.len()))
                     .size(16)
-                    .style(iced::theme::Text::Color(colors::TEXT_PRIMARY))
+                    .style(iced::theme::Text::Color(app.palette().background.base.text))
             );
             cover_results_column = cover_results_column.push(Space::with_height(Length::Fixed(10.0)));
             
             for (index, cover) in app.cover.cover_search_results.iter().enumerate() {
+                let thumb: Element<Message> = if let Some(handle) = app.cover.cover_search_result_handles.get(&cover.url) {
+                    container(
+                        image(handle.clone())
+                            .width(Length::Fixed(80.0))
+                            .height(Length::Fixed(120.0)),
+                    )
+                    .width(Length::Fixed(80.0))
+                    .height(Length::Fixed(120.0))
+                    .style(iced::theme::Container::Box)
+                    .center_x()
+                    .center_y()
+                    .into()
+                } else {
+                    container(
+                        text("🖼️")
+                            .size(24)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center)
+                    )
+                    .width(Length::Fixed(80.0))
+                    .height(Length::Fixed(120.0))
+                    .style(iced::theme::Container::Box)
+                    .center_x()
+                    .center_y()
+                    .into()
+                };
                 cover_results_column = cover_results_column.push(
                     container(
                         row![
-                            container(
-                                text("🖼️")
-                                    .size(24)
-                                    .horizontal_alignment(iced::alignment::Horizontal::Center)
-                            )
-                            .width(Length::Fixed(80.0))
-                            .height(Length::Fixed(120.0))
-                            .style(iced::theme::Container::Box)
-                            .center_x()
-                            .center_y(),
+                            thumb,
                             column![
                                 text(&cover.source)
                                     .size(14)
@@ -218,16 +233,16 @@ pub fn view_cover(app: &Lectern) -> Element<'_, Message> {
                             column![
                                 text("Cover Options")
                                     .size(20)
-                                    .style(iced::theme::Text::Color(colors::TEXT_PRIMARY)),
+                                    .style(iced::theme::Text::Color(app.palette().background.base.text)),
                                 Space::with_height(Length::Fixed(15.0)),
                                 button("Browse Image File...")
                                     .on_press(Message::BrowseCoverImage)
-                                    .style(iced::theme::Button::Primary)
+                                    .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
                                     .padding([12, 20]),
                                 Space::with_height(Length::Fixed(15.0)),
                                 text("Or enter URL:")
                                     .size(14)
-                                    .style(iced::theme::Text::Color(colors::TEXT_SECONDARY)),
+                                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
                                 text_input("Cover Image URL", 
                                     app.cover.cover_image_path.as_deref().unwrap_or(""))
                                     .on_input(Message::CoverUrlChanged)

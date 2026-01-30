@@ -1,8 +1,64 @@
+use crate::ui::theme::build_theme;
+use crate::ui::theme::palette_for;
+use crate::ui::theme_settings;
 use crate::ui::{Lectern, Message};
 use iced::Command;
 
+fn refresh_palette_cache(app: &mut Lectern) {
+    app.cached_palette = Some(
+        build_theme(app.theme_id, app.dark_mode, app.accent_override).1,
+    );
+}
+
+fn save_theme_settings(app: &Lectern) {
+    theme_settings::save(app.theme_id, app.dark_mode, app.accent_override);
+}
+
 pub fn handle_settings(app: &mut Lectern, message: Message) -> Option<Command<Message>> {
     match message {
+        Message::ThemeIdChanged(theme_id) => {
+            app.theme_id = theme_id;
+            refresh_palette_cache(app);
+            save_theme_settings(app);
+            Some(Command::none())
+        }
+        Message::DarkModeToggled(dark) => {
+            app.dark_mode = dark;
+            refresh_palette_cache(app);
+            save_theme_settings(app);
+            Some(Command::none())
+        }
+        Message::AccentColorChanged(accent) => {
+            app.accent_override = accent;
+            app.accent_hex_input = accent
+                .map(theme_settings::color_to_hex_export)
+                .unwrap_or_default();
+            refresh_palette_cache(app);
+            save_theme_settings(app);
+            Some(Command::none())
+        }
+        Message::AccentHexInputChanged(s) => {
+            app.accent_hex_input = s.clone();
+            if let Some(c) = theme_settings::parse_accent_hex(&s) {
+                app.accent_override = Some(c);
+                refresh_palette_cache(app);
+                save_theme_settings(app);
+            }
+            Some(Command::none())
+        }
+        Message::UseThemeDefaultAccentToggled(use_default) => {
+            if use_default {
+                app.accent_override = None;
+                app.accent_hex_input.clear();
+            } else if app.accent_override.is_none() {
+                let palette = palette_for(app.theme_id, app.dark_mode);
+                app.accent_override = Some(palette.primary);
+                app.accent_hex_input = theme_settings::color_to_hex_export(palette.primary);
+            }
+            refresh_palette_cache(app);
+            save_theme_settings(app);
+            Some(Command::none())
+        }
         Message::LocalLibraryPathChanged(path) => {
             app.local_library_path = if path.trim().is_empty() {
                 None

@@ -15,11 +15,16 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
     match message {
         Message::ChapterTitleChanged(index, new_title) => {
             if let Some(chapter) = app.chapters.chapters.get_mut(index) {
-                chapter.title = new_title;
+                if !chapter.is_locked {
+                    chapter.title = new_title;
+                }
             }
             Some(Command::none())
         }
         Message::ChapterTimeChanged(index, time_str) => {
+            if app.chapters.chapters.get(index).map(|c| c.is_locked).unwrap_or(true) {
+                return Some(Command::none());
+            }
             // Store the raw input value while editing
             app.chapters.chapter_time_editing.insert(index, time_str.clone());
             
@@ -53,18 +58,48 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                     let current_seconds = (chapter.start_time / 1000) as i64;
                     let new_seconds = (current_seconds + adjustment_seconds).max(0);
                     chapter.start_time = (new_seconds * 1000) as u64;
+                    // Keep displayed value in sync so the text field and +1/-1 stay correct
+                    app.chapters.chapter_time_editing.insert(index, format_time(chapter.start_time, app.chapters.show_seconds));
                 }
             }
             Some(Command::none())
         }
         Message::ChapterLockToggled(index) => {
-            if let Some(chapter) = app.chapters.chapters.get_mut(index) {
-                chapter.is_locked = !chapter.is_locked;
+            if app.chapters.shift_held {
+                if let Some(anchor) = app.chapters.last_lock_clicked_index {
+                    let (lo, hi) = (anchor.min(index), anchor.max(index));
+                    let target_locked = app.chapters.chapters.get(index).map(|c| !c.is_locked).unwrap_or(true);
+                    for j in lo..=hi {
+                        if let Some(ch) = app.chapters.chapters.get_mut(j) {
+                            ch.is_locked = target_locked;
+                        }
+                    }
+                    app.chapters.last_lock_clicked_index = Some(index);
+                } else {
+                    if let Some(chapter) = app.chapters.chapters.get_mut(index) {
+                        chapter.is_locked = !chapter.is_locked;
+                    }
+                    app.chapters.last_lock_clicked_index = Some(index);
+                }
+            } else {
+                if let Some(chapter) = app.chapters.chapters.get_mut(index) {
+                    chapter.is_locked = !chapter.is_locked;
+                }
+                app.chapters.last_lock_clicked_index = None;
+            }
+            Some(Command::none())
+        }
+        Message::ShiftModifierChanged(held) => {
+            app.chapters.shift_held = held;
+            if !held {
+                app.chapters.last_lock_clicked_index = None;
             }
             Some(Command::none())
         }
         Message::ChapterDelete(index) => {
-            if index < app.chapters.chapters.len() {
+            if index < app.chapters.chapters.len()
+                && !app.chapters.chapters.get(index).map(|c| c.is_locked).unwrap_or(true)
+            {
                 app.chapters.chapters.remove(index);
             }
             Some(Command::none())
@@ -107,36 +142,64 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
         Message::ChapterLookup => {
             app.chapters.is_looking_up_chapters = true;
             app.chapters.lookup_error = None;
-            
-            let asin = if !app.chapters.asin_input.trim().is_empty() {
+
+            // Use manual input, then metadata ASIN, then selected book ASIN, then metadata ISBN, then selected book ISBN
+            let identifier = if !app.chapters.asin_input.trim().is_empty() {
                 Some(app.chapters.asin_input.trim().to_string())
+            } else if !app.metadata.editing_asin.trim().is_empty() {
+                Some(app.metadata.editing_asin.trim().to_string())
             } else {
-                app.metadata.selected_book.as_ref()
-                    .and_then(|b| b.asin.clone())
+                app.metadata.selected_book.as_ref().and_then(|b| b.asin.clone())
+                    .or_else(|| {
+                        if !app.metadata.editing_isbn.trim().is_empty() {
+                            Some(app.metadata.editing_isbn.trim().to_string())
+                        } else {
+                            app.metadata.selected_book.as_ref().and_then(|b| b.isbn.clone())
+                        }
+                    })
             };
-            
+
             let region = app.chapters.selected_region.to_string().to_lowercase();
-            
-            if let Some(asin_val) = asin {
-                println!("[DEBUG] Looking up chapters for ASIN: {} (Region: {})", asin_val, region);
+
+            if let Some(asin_val) = identifier {
+                println!("[DEBUG] Looking up chapters for ASIN/ISBN: {} (Region: {})", asin_val, region);
+                let gen = app.chapters.load_generation;
                 return Some(Command::perform(
                     async move {
                         AudioService::fetch_chapters_by_asin(&asin_val, &region).await
                     },
-                    Message::ChapterLookupCompleted,
+                    move |result| Message::ChapterLookupCompleted(gen, result),
                 ));
             } else {
                 app.chapters.is_looking_up_chapters = false;
-                app.chapters.lookup_error = Some("No ASIN available. Please enter an ASIN in the field above or search for a book first.".to_string());
+                app.chapters.lookup_error = Some("No ASIN or ISBN available. Enter one in the lookup field above or fill in Metadata (ISBN/ASIN) first.".to_string());
             }
             Some(Command::none())
         }
         Message::ChapterToggleAsinInput => {
             app.chapters.show_asin_input = !app.chapters.show_asin_input;
+            // When opening the lookup panel, pre-populate from metadata: ASIN first, then ISBN
+            if app.chapters.show_asin_input && app.chapters.asin_input.trim().is_empty() {
+                if !app.metadata.editing_asin.trim().is_empty() {
+                    app.chapters.asin_input = app.metadata.editing_asin.trim().to_string();
+                } else if let Some(ref book) = app.metadata.selected_book {
+                    if let Some(ref asin) = book.asin {
+                        app.chapters.asin_input = asin.clone();
+                    } else if let Some(ref isbn) = book.isbn {
+                        app.chapters.asin_input = isbn.clone();
+                    }
+                } else if !app.metadata.editing_isbn.trim().is_empty() {
+                    app.chapters.asin_input = app.metadata.editing_isbn.trim().to_string();
+                }
+            }
             Some(Command::none())
         }
         Message::ChapterRegionChanged(region) => {
             app.chapters.selected_region = region;
+            Some(Command::none())
+        }
+        Message::ChapterListViewportChanged { offset_y, viewport_height, content_height } => {
+            app.chapters.chapter_list_viewport = Some((offset_y, viewport_height, content_height));
             Some(Command::none())
         }
         Message::ChapterRemoveAudibleToggled(remove) => {
@@ -150,17 +213,44 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
         Message::MapChaptersFromFiles => {
             if app.file.audio_file_paths.is_empty() {
                 app.chapters.lookup_error = Some("No audio files found. Please select a directory with audio files first.".to_string());
+                Some(Command::none())
             } else {
-                match generate_chapters_from_files(&app.file.audio_file_paths).map_err(|e| e.to_string()) {
-                    Ok(chapters) => {
-                        app.chapters.chapters = chapters;
-                        println!("[DEBUG] Mapped {} chapters from {} audio files", app.chapters.chapters.len(), app.file.audio_file_paths.len());
+                app.chapters.is_mapping_from_files = true;
+                app.chapters.lookup_error = None;
+                let paths = app.file.audio_file_paths.clone();
+                let gen = app.chapters.load_generation;
+                Some(Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            generate_chapters_from_files(&paths).map_err(|e| e.to_string())
+                        })
+                        .await
+                        .unwrap_or_else(|_| Err("Task failed".to_string()))
                     },
-                    Err(e) => {
-                        app.chapters.lookup_error = Some(format!("Failed to generate chapters: {}", e));
-                        println!("[ERROR] Failed to generate chapters: {}", e);
-                    }
+                    move |result| Message::MapChaptersFromFilesCompleted(gen, result),
+                ))
+            }
+        }
+        Message::MapChaptersFromFilesCompleted(gen, result) => {
+            app.chapters.is_mapping_from_files = false;
+            if gen != app.chapters.load_generation {
+                return Some(Command::none());
+            }
+            match result {
+                Ok(chapters) => {
+                    app.chapters.chapters = chapters;
+                    println!("[DEBUG] Mapped {} chapters from {} audio files", app.chapters.chapters.len(), app.file.audio_file_paths.len());
                 }
+                Err(e) => {
+                    app.chapters.lookup_error = Some(format!("Failed to generate chapters: {}", e));
+                    println!("[ERROR] Failed to generate chapters: {}", e);
+                }
+            }
+            Some(Command::none())
+        }
+        Message::BookDurationComputed(gen, result) => {
+            if gen == app.chapters.load_generation {
+                app.chapters.book_duration_ms = result.ok();
             }
             Some(Command::none())
         }
@@ -169,22 +259,25 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                 app.chapters.is_looking_up_chapters = true;
                 app.chapters.lookup_error = None;
                 let path_clone = file_path.clone();
-                
+                let gen = app.chapters.load_generation;
                 return Some(Command::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             extract_chapters_from_file(&path_clone).map_err(|e| e.to_string())
                         }).await.unwrap_or_else(|_| Err("Task join error".to_string()))
                     },
-                    Message::ChapterExtractCompleted,
+                    move |result| Message::ChapterExtractCompleted(gen, result),
                 ));
             } else {
                 app.chapters.lookup_error = Some("No file selected. Please select an audio file first.".to_string());
             }
             Some(Command::none())
         }
-        Message::ChapterExtractCompleted(Ok(chapters)) => {
+        Message::ChapterExtractCompleted(gen, Ok(chapters)) => {
             app.chapters.is_looking_up_chapters = false;
+            if gen != app.chapters.load_generation {
+                return Some(Command::none());
+            }
             if !chapters.is_empty() {
                 app.chapters.chapters = chapters;
                 println!("[DEBUG] Extracted {} chapters from file", app.chapters.chapters.len());
@@ -193,10 +286,12 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
             }
             Some(Command::none())
         }
-        Message::ChapterExtractCompleted(Err(e)) => {
+        Message::ChapterExtractCompleted(gen, Err(e)) => {
             app.chapters.is_looking_up_chapters = false;
-            app.chapters.lookup_error = Some(format!("Failed to extract chapters: {}", e));
-            println!("[ERROR] Failed to extract chapters: {}", e);
+            if gen == app.chapters.load_generation {
+                app.chapters.lookup_error = Some(format!("Failed to extract chapters: {}", e));
+                println!("[ERROR] Failed to extract chapters: {}", e);
+            }
             Some(Command::none())
         }
         Message::ChapterShiftAll(offset_ms) => {
@@ -211,6 +306,29 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                 }
             }
             println!("[DEBUG] Shifted {} unlocked chapters by {} ms", chapters_count, offset_ms);
+            Some(Command::none())
+        }
+        Message::ChapterShiftAmountChanged(s) => {
+            app.chapters.shift_all_input = s;
+            Some(Command::none())
+        }
+        Message::ChapterShiftAllApply => {
+            let s = app.chapters.shift_all_input.trim();
+            if let Ok(secs) = s.parse::<f64>() {
+                let offset_ms = (secs * 1000.0).round() as i64;
+                if offset_ms != 0 {
+                    for chapter in &mut app.chapters.chapters {
+                        if !chapter.is_locked {
+                            if offset_ms < 0 && chapter.start_time < (-offset_ms) as u64 {
+                                chapter.start_time = 0;
+                            } else {
+                                chapter.start_time = (chapter.start_time as i64 + offset_ms).max(0) as u64;
+                            }
+                        }
+                    }
+                    println!("[DEBUG] Shifted unlocked chapters by {} s ({} ms)", secs, offset_ms);
+                }
+            }
             Some(Command::none())
         }
         Message::ChapterValidate => {
@@ -376,23 +494,28 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                     // Update elapsed time
                     state.elapsed_ms = state.start_time.elapsed().as_millis() as u64;
                     
-                    // Check if process has exited (non-blocking check) - do this in parallel with scheduling next tick
+                    // Check if process has exited (non-blocking). Use try_lock() so we don't block
+                    // on the background monitor that holds the lock in wait(). Schedule next tick
+                    // after 100ms so the timer advances.
                     if let Some(ref process_handle) = app.chapter_playback_process {
                         let process_check = process_handle.clone();
                         let elapsed = state.elapsed_ms;
                         
-                        // Check process status asynchronously
                         return Some(Command::perform(
                             async move {
-                                let mut proc = process_check.lock().await;
-                                proc.process.try_wait()
+                                let exit_status = if let Ok(mut proc) = process_check.try_lock() {
+                                    proc.process.try_wait()
+                                } else {
+                                    Ok(None)
+                                };
+                                tokio::time::sleep(Duration::from_millis(100)).await;
+                                exit_status
                             },
                             move |exit_status| {
                                 if exit_status.is_ok_and(|opt| opt.is_some()) {
                                     println!("[DEBUG] Process exited detected in tick handler (after {} ms)", elapsed);
                                     Message::ChapterPlaybackProcessExited
                                 } else {
-                                    // Continue ticking
                                     Message::ChapterPlaybackTick
                                 }
                             },
@@ -426,6 +549,14 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                         |_| Message::ChapterPlaybackTick,
                     ));
                 }
+            }
+            Some(Command::none())
+        }
+        Message::ChapterLoadingTick => {
+            if app.chapters.is_mapping_from_files || app.chapters.is_looking_up_chapters {
+                app.chapters.loading_spinner_phase = (app.chapters.loading_spinner_phase + 1) % 4;
+                app.chapters.loading_spinner_rotation =
+                    (app.chapters.loading_spinner_rotation + 12.0) % 360.0;
             }
             Some(Command::none())
         }
@@ -510,18 +641,47 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
             println!("[DEBUG] Chapter playback process exited");
             Some(Command::none())
         }
-        Message::ChapterLookupCompleted(Ok(chapters)) => {
+        Message::ChapterLookupCompleted(gen, Ok(chapters)) => {
             app.chapters.is_looking_up_chapters = false;
+            if gen != app.chapters.load_generation {
+                return Some(Command::none());
+            }
+            app.chapters.show_asin_input = false; // Hide lookup section after successful search
             let count = chapters.len();
             if !chapters.is_empty() {
-                app.chapters.chapters = chapters;
-                println!("[DEBUG] Loaded {} chapters from provider", count);
+                // Store as pending; user chooses Apply (replace) or Map titles only
+                app.chapters.lookup_result = Some(chapters.clone());
+                let last = chapters.last().unwrap();
+                app.chapters.lookup_duration_ms = Some(last.start_time + last.duration);
+                println!("[DEBUG] Lookup found {} chapters from Audible; duration {:?} ms", count, app.chapters.lookup_duration_ms);
             }
             Some(Command::none())
         }
-        Message::ChapterLookupCompleted(Err(e)) => {
+        Message::ChapterLookupApply => {
+            if let Some(chapters) = app.chapters.lookup_result.take() {
+                app.chapters.chapters = chapters;
+                app.chapters.chapter_time_editing.clear();
+                println!("[DEBUG] Applied looked-up chapters (replaced)");
+            }
+            Some(Command::none())
+        }
+        Message::MapChapterTitlesOnly => {
+            if let Some(lookup) = app.chapters.lookup_result.take() {
+                let n = lookup.len().min(app.chapters.chapters.len());
+                for i in 0..n {
+                    if let Some(ch) = app.chapters.chapters.get_mut(i) {
+                        ch.title = lookup[i].title.clone();
+                    }
+                }
+                println!("[DEBUG] Mapped {} titles to existing chapters (timestamps unchanged)", n);
+            }
+            Some(Command::none())
+        }
+        Message::ChapterLookupCompleted(gen, Err(e)) => {
             app.chapters.is_looking_up_chapters = false;
-            app.chapters.lookup_error = Some(e);
+            if gen == app.chapters.load_generation {
+                app.chapters.lookup_error = Some(e);
+            }
             Some(Command::none())
         }
         Message::ChaptersShowSecondsToggled(show) => {
@@ -574,6 +734,8 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                         // Now update the chapter (after validation)
                         if let Some(chapter) = app.chapters.chapters.get_mut(index) {
                             chapter.start_time = current_position_ms;
+                            // Keep displayed value in sync with model
+                            app.chapters.chapter_time_editing.insert(index, format_time(chapter.start_time, app.chapters.show_seconds));
                             app.chapters.lookup_error = None; // Clear error on valid input
                             println!("[DEBUG] Set chapter {} start time to {} ms (current playback position)", index + 1, current_position_ms);
                         }
