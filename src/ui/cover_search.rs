@@ -8,11 +8,14 @@ pub struct CoverResult {
 
 // Download image from URL
 pub async fn download_image(url: &str) -> Result<(String, Vec<u8>), String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(3))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     println!("[DEBUG] Downloading image from: {}", url);
     
     let response = client.get(url)
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(12))
         .send()
         .await
         .map_err(|e| format!("Failed to download image: {}", e))?;
@@ -38,7 +41,8 @@ pub fn download_images_parallel_threaded(urls: Vec<String>) -> std::thread::Join
         
         // Create a single HTTP client with connection pooling
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(8))
+            .connect_timeout(std::time::Duration::from_secs(2))
+            .timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         

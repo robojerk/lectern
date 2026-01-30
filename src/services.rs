@@ -1,5 +1,6 @@
 use tokio;
 use anyhow::Result;
+use futures::future::join_all;
 
 pub mod ffprobe;
 pub mod playback;
@@ -11,6 +12,15 @@ pub use crate::models::BookMetadata;
 // Define the AudioService struct
 pub struct AudioService;
 
+/// HTTP client with short connect timeout so slow/hanging connections fail fast (e.g. under Wine).
+fn meta_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(3))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+#[allow(dead_code)]
 impl AudioService {
     // Method to fetch single metadata
     pub async fn fetch_metadata(query: &str) -> Result<BookMetadata, String> {
@@ -164,13 +174,13 @@ impl AudioService {
     
     // Search Audnexus API by ASIN (https://api.audnex.us)
     async fn search_audnexus_by_asin(asin: &str) -> Result<Vec<BookMetadata>, String> {
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         let url = format!("https://api.audnex.us/books/{}", urlencoding::encode(asin));
         
         println!("[DEBUG] Audnexus URL: {}", url);
         
         let response = client.get(&url)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(6))
             .send()
             .await
             .map_err(|e| format!("Audnexus request failed: {}", e))?;
@@ -400,7 +410,7 @@ impl AudioService {
     // Search Open Library API
     async fn search_open_library(query: &str) -> Result<Vec<BookMetadata>, String> {
         println!("[DEBUG] Searching Open Library for: {}", query);
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         let url = format!("https://openlibrary.org/search.json?q={}&limit=10", 
                          urlencoding::encode(query));
         println!("[DEBUG] Open Library URL: {}", url);
@@ -443,7 +453,7 @@ impl AudioService {
     
     // Search Open Library by ISBN
     async fn search_open_library_by_isbn(isbn: &str) -> Result<Vec<BookMetadata>, String> {
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         let url = format!("https://openlibrary.org/isbn/{}.json", isbn);
         
         let response = client.get(&url)
@@ -610,7 +620,7 @@ impl AudioService {
     // Search Google Books API
     async fn search_google_books(query: &str) -> Result<Vec<BookMetadata>, String> {
         println!("[DEBUG] Searching Google Books for: {}", query);
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         let url = format!("https://www.googleapis.com/books/v1/volumes?q={}&maxResults=10", 
                          urlencoding::encode(query));
         println!("[DEBUG] Google Books URL: {}", url);
@@ -801,14 +811,14 @@ impl AudioService {
     // Fetch chapters from Audnexus by ASIN
     pub async fn fetch_chapters_by_asin(asin: &str, region: &str) -> Result<Vec<crate::models::Chapter>, String> {
         
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         let url = format!("https://api.audnex.us/books/{}/chapters?region={}", 
                          urlencoding::encode(asin), region);
         
         println!("[DEBUG] Fetching chapters from Audnexus: {}", url);
         
         let response = client.get(&url)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(6))
             .send()
             .await
             .map_err(|e| format!("Audnexus chapters request failed: {}", e))?;
@@ -867,14 +877,14 @@ impl AudioService {
         
         if is_asin {
             // Direct ASIN lookup via Audnexus
-            let client = reqwest::Client::new();
+            let client = meta_http_client();
             let url = format!("https://api.audnex.us/books/{}?region={}", 
                              urlencoding::encode(query), region);
             
             println!("[DEBUG] Audible (region: {}) ASIN search URL: {}", region, url);
             
             let response = client.get(&url)
-                .timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(6))
                 .send()
                 .await
                 .map_err(|e| format!("Audible request failed: {}", e))?;
@@ -900,7 +910,7 @@ impl AudioService {
             }
         } else {
             // Title/author search: Use Audible Catalog API to find ASINs, then fetch details from Audnexus
-            let client = reqwest::Client::new();
+            let client = meta_http_client();
             
             // Map region to TLD
             let tld = match region {
@@ -934,7 +944,7 @@ impl AudioService {
             println!("[DEBUG] Audible (region: {}) Catalog search URL: {}", region, url);
             
             let response = client.get(&url)
-                .timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(6))
                 .send()
                 .await
                 .map_err(|e| format!("Audible catalog request failed: {}", e))?;
@@ -957,10 +967,15 @@ impl AudioService {
             
             println!("[DEBUG] Audible catalog found {} products (ASINs)", asins.len());
             
-            // Fetch full details for each ASIN from Audnexus
+            // Fetch full details for each ASIN from Audnexus in parallel (avoids long freeze under Wine)
+            let asin_futures: Vec<_> = asins.iter()
+                .take(10)
+                .map(|asin| Self::search_audnexus_by_asin_with_region(asin.as_str(), region))
+                .collect();
+            let asin_results = join_all(asin_futures).await;
             let mut results = Vec::new();
-            for asin in asins.iter().take(10) {
-                if let Ok(mut asin_results) = Self::search_audnexus_by_asin_with_region(asin, region).await {
+            for r in asin_results {
+                if let Ok(mut asin_results) = r {
                     results.append(&mut asin_results);
                 }
             }
@@ -975,14 +990,14 @@ impl AudioService {
     
     // Search Audnexus API by ASIN with region parameter
     async fn search_audnexus_by_asin_with_region(asin: &str, region: &str) -> Result<Vec<BookMetadata>, String> {
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         let url = format!("https://api.audnex.us/books/{}?region={}", 
                          urlencoding::encode(asin), region);
         
         println!("[DEBUG] Audnexus (region: {}) URL: {}", region, url);
         
         let response = client.get(&url)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(6))
             .send()
             .await
             .map_err(|e| format!("Audnexus request failed: {}", e))?;
@@ -1010,7 +1025,7 @@ impl AudioService {
     
     // Search iTunes Store API
     async fn search_itunes(query: &str) -> Result<Vec<BookMetadata>, String> {
-        let client = reqwest::Client::new();
+        let client = meta_http_client();
         // iTunes Search API - audiobook media type
         let url = format!("https://itunes.apple.com/search?term={}&media=audiobook&limit=10", 
                          urlencoding::encode(query));
@@ -1018,7 +1033,7 @@ impl AudioService {
         println!("[DEBUG] iTunes URL: {}", url);
         
         let response = client.get(&url)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(6))
             .send()
             .await
             .map_err(|e| format!("iTunes request failed: {}", e))?;
@@ -1139,6 +1154,7 @@ impl AudioService {
 }
 
 // Add a helper function to get metadata from a file
+#[allow(dead_code)]
 pub async fn get_file_metadata(file_path: &str) -> Result<BookMetadata, String> {
     // This would extract metadata from audio files
     // For now, return mock data

@@ -11,6 +11,20 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use iced::Command;
 
+/// Kill process by PID so playback actually stops (Windows/Wine: taskkill; Unix: kill -KILL).
+fn kill_playback_process(pid: u32) {
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F", "/T"])
+            .output();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("kill").arg("-KILL").arg(&pid.to_string()).output();
+    }
+}
+
 pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Message>> {
     match message {
         Message::ChapterTitleChanged(index, new_title) => {
@@ -373,7 +387,11 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
             Some(Command::none())
         }
         Message::ChapterPlay(index) => {
-            // Stop any existing playback first
+            // Kill any previous playback process by PID so we don't accumulate zombies (e.g. under Wine when stop didn't work)
+            if let Some(pid) = app.chapter_playback_state.as_ref().and_then(|s| s.process_id) {
+                kill_playback_process(pid);
+            }
+            // Stop any existing playback first (handle-based kill)
             if let Some(ref state) = app.chapter_playback_state {
                 if state.is_playing {
                     if let Some(process_handle) = app.chapter_playback_process.take() {
@@ -574,45 +592,29 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
             
             println!("[DEBUG] User manually stopped chapter playback");
             
-            // Try to kill via process handle first
+            // Kill by PID now + delayed again so playback stops (Windows/Wine: taskkill; Unix: TERM then KILL)
+            if let Some(pid) = process_id {
+                kill_playback_process(pid);
+                println!("[DEBUG] Sent kill to process {}", pid);
+                let pid_delayed = pid;
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    kill_playback_process(pid_delayed);
+                });
+            }
+            
+            // Try to kill via process handle as well
             if let Some(process_handle) = app.chapter_playback_process.take() {
                 let process = process_handle.clone();
-                // Also try kill command as immediate fallback
-                if let Some(pid) = process_id {
-                    let _ = std::process::Command::new("kill")
-                        .arg("-TERM")
-                        .arg(&pid.to_string())
-                        .output();
-                    println!("[DEBUG] Sent TERM signal to process {}", pid);
-                }
                 return Some(Command::perform(
                     async move {
                         let mut proc = process.lock().await;
-                        // Use start_kill() for immediate termination, then wait
                         let _ = proc.process.start_kill();
-                        // Give it a moment to die, then force kill if needed
-                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                         let _ = proc.process.kill().await;
                     },
                     |_| Message::ChapterPlaybackProcessExited,
                 ));
-            }
-            
-            // Fallback: kill via process ID if we don't have the handle
-            if let Some(pid) = process_id {
-                let _ = std::process::Command::new("kill")
-                    .arg("-TERM")
-                    .arg(&pid.to_string())
-                    .output();
-                println!("[DEBUG] Sent TERM signal to process {} (fallback)", pid);
-                // Also try SIGKILL if TERM doesn't work
-                tokio::spawn(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                    let _ = std::process::Command::new("kill")
-                        .arg("-KILL")
-                        .arg(&pid.to_string())
-                        .output();
-                });
             }
             
             app.chapter_playback_state = None;

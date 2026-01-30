@@ -30,6 +30,7 @@ pub struct ProcessingOptions {
     pub normalize_volume: bool,
     pub rewrite_chapters: bool,
     pub max_cover_size: u32,
+    #[allow(dead_code)]
     pub use_temp_dir: bool,
     pub atomic_write: bool,
 }

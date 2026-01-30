@@ -54,6 +54,7 @@ use iced::keyboard::key;
 
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Message {
     SearchQueryChanged(String),
     SearchAuthorChanged(String),

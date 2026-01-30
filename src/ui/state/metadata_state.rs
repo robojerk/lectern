@@ -37,6 +37,7 @@ impl MetadataProvider {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_id(id: &str) -> Self {
         match id {
             "audible_com" => MetadataProvider::AudibleCom,

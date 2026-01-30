@@ -6,25 +6,26 @@ This app takes A LOT of inspiration from Audiobookshelf
 
 ## Status
 
-- This app needs a lot of ironing out. Image loading is slow but works \
-- Metadata search, editing seems to work.  Image loading on search is slow \
-- Cover art seems to work (image loasing is slow) \
-- Chapter editing.  This needs a lot more work. \
-- Conversion.  Seems to work, \
-- Upload to ABS through API.  Untested. \
-- Themes: I used iced because I never used it.  Discovered drag and drop is not functional on Wayland. And I felt the app was ugly. I asked Gemini to make it so I could create some theme.  Hopesully someone who knows rust and making apps prettier than I does something with that.
+- This app needs a lot of ironing out. Image loading is slow but works.
+- Metadata search, editing seems to work.  Image loading on search is slow
+- Cover art seems to work (image loading is slow)
+- Loading chapters after open an audiobook with the app can be slow. Needs tune up.
+- Chapter editing.  This needs a lot more work. The bones are there, needs a lot of refinement before it could be considered useful.
+- Conversion: Seems to work.
+- Upload to ABS through API.  Untested. Chapter editing is my focus atm.
+- Themes: I used iced because I never used it and wanted to experiment.  Discovered drag and drop is not functional on Wayland. And I felt the app was ugly. I asked Gemini to make it so I could create some themes.  Hopesully someone who knows rust better and making apps prettier than I does something with that.
 
 ## Features
 
-✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app (on xorg or xWayland only) \
-✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information  \
-✅ **Editable Metadata** - Review and modify title, author, series, and narrator \ 
-⚠️ **Chapter Management** - Create, edit, and manage chapter markers with playback preview. Needs some work
-✅ **Cover Art Search** - Search and download cover images from multiple sources  \
-✅ **M4B Conversion** - High-quality AAC encoding with FFmpeg  \
-✅ **Metadata Tagging** - Embeds metadata during FFmpeg conversion  \
-❌ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan  (This is untested) \
-✅ **UI Themes** - Iced is ugly.  I asked Gemini to make it themable.
+- ✅ **Drag-and-Drop Interface** — Simply drag your audiobook folder into the app (on xorg or xWayland only)
+- ✅ **Automatic Metadata Fetching** — Queries Audnexus API for book information
+- ✅ **Editable Metadata** — Review and modify title, author, series, and narrator
+- ⚠️ **Chapter Management** — Create, edit, and manage chapter markers with playback preview. Needs some work
+- ✅ **Cover Art Search** — Search and download cover images from multiple sources
+- ✅ **M4B Conversion** — High-quality AAC encoding with FFmpeg
+- ✅ **Metadata Tagging** — Embeds metadata during FFmpeg conversion
+- ❌ **Direct Upload** — Uploads to Audiobookshelf and triggers library scan (This is untested)
+- ✅ **UI Themes** — Iced is ugly. I asked Gemini to make it themable.
 
 ## Project Structure
 
