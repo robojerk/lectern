@@ -120,6 +120,7 @@ pub enum Message {
     ChapterLookupCompleted(u64, Result<Vec<Chapter>, String>),
     ChapterLookupApply, // Apply looked-up chapters (replace current)
     MapChapterTitlesOnly, // Apply looked-up titles to existing chapters by index, keep timestamps
+    ChapterLookupCancel, // Cancel lookup results, back to chapter tab
     ChapterExtractFromFile, // Extract chapters from file using ffprobe
     ChapterExtractCompleted(u64, Result<Vec<Chapter>, String>),
     ChapterShiftAll(i64), // Shift all chapters by offset (milliseconds, can be negative)

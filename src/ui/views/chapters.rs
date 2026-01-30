@@ -91,7 +91,7 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                         
                         button("Search")
                             .on_press(Message::ChapterLookup)
-                            .style(iced::theme::Button::Primary)
+                            .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
                             .padding([12, 20]),
                     ]
                     .spacing(15)
@@ -128,12 +128,8 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
             Space::with_height(Length::Fixed(0.0)).into()
         };
         
-        // Top controls
-        let mut controls_row = row![
-            button("Extract from File")
-                .on_press(Message::ChapterExtractFromFile)
-                .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
-                .padding([10, 15]),
+        // Top controls (Extract/Map/Validate removed; done on open or via Lookup)
+        let controls_row = row![
             button("Lookup")
                 .on_press(Message::ChapterToggleAsinInput)
                 .style(if app.chapters.show_asin_input {
@@ -142,31 +138,11 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
                     iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id))
                 })
                 .padding([10, 15]),
-            button("Validate")
-                .on_press(Message::ChapterValidate)
-                .style(iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id)))
-                .padding([10, 15]),
             button("Remove All")
                 .on_press(Message::ChapterRemoveAll)
                 .style(iced::theme::Button::custom(crate::ui::theme::RoundedDestructive(app.theme_id)))
                 .padding([10, 15]),
         ];
-        
-        // Add map files button if audio files are available
-        if !app.file.audio_file_paths.is_empty() {
-            let count = app.file.audio_file_paths.len();
-            let btn_label = if count == 1 {
-                "Map from 1 File"
-            } else {
-                "Map from Files"
-            };
-            controls_row = controls_row.push(
-                button(btn_label)
-                    .on_press(Message::MapChaptersFromFiles)
-                    .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
-                    .padding([10, 15])
-            );
-        }
         
         // Shift all: single field (seconds, e.g. "-5" or "2.5") + Apply button
         let shift_controls: Element<Message> = if !app.chapters.chapters.is_empty() {
@@ -250,39 +226,6 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
             Space::with_height(Length::Fixed(0.0)).into()
         };
 
-        // Pending lookup: Apply (replace) or Map titles only
-        let lookup_pending_section: Element<Message> = if let Some(ref lookup) = app.chapters.lookup_result {
-            let n = lookup.len();
-            container(
-                column![
-                    text(format!("Found {} chapters from Audible.", n))
-                        .size(14)
-                        .style(iced::theme::Text::Color(app.palette().background.base.text)),
-                    row![
-                        button("Apply")
-                            .on_press(Message::ChapterLookupApply)
-                            .style(iced::theme::Button::Primary)
-                            .padding([10, 16]),
-                        button("Map Chapter Titles")
-                            .on_press(Message::MapChapterTitlesOnly)
-                            .style(iced::theme::Button::Secondary)
-                            .padding([10, 16]),
-                    ]
-                    .spacing(12)
-                    .align_items(Alignment::Center),
-                    text("Apply replaces your chapters. Map Chapter Titles keeps your timestamps and applies these titles to your existing chapters (by index).")
-                        .size(12)
-                        .style(iced::theme::Text::Color(app.palette().background.weak.text)),
-                ]
-                .spacing(10),
-            )
-            .padding(15)
-            .style(iced::theme::Container::Box)
-            .into()
-        } else {
-            Space::with_height(Length::Fixed(0.0)).into()
-        };
-        
         // Chapter list header - styled as a table header (error column for duration violation icon)
         let header = container(
             row![
@@ -733,23 +676,85 @@ pub fn view_chapters(app: &Lectern) -> Element<'_, Message> {
             text(status_text).size(14).into()
         };
         
-        // Layout: fixed top (tabs, ASIN, controls, shift, header), scrollable list only, fixed bottom (status).
-        // No extra padding on this column so the tab bar stays in the same position as on other tabs.
-        container(
+        // When lookup result is pending, show full-window lookup results (Apply / Map titles / Cancel).
+        // Otherwise show normal chapter tab (controls, list, status).
+        let main_content: Element<Message> = if let Some(ref lookup) = app.chapters.lookup_result {
+            let mut list = Column::new().spacing(6);
+            for (i, ch) in lookup.iter().enumerate() {
+                list = list.push(
+                    container(
+                        row![
+                            text(format!("{}", i + 1))
+                                .width(Length::Fixed(44.0))
+                                .size(14)
+                                .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                            text(format_time(ch.start_time, true))
+                                .width(Length::Fixed(110.0))
+                                .size(14)
+                                .style(iced::theme::Text::Color(app.palette().background.base.text)),
+                            text(&ch.title)
+                                .size(14)
+                                .style(iced::theme::Text::Color(app.palette().background.base.text)),
+                        ]
+                        .spacing(12)
+                        .align_items(Alignment::Center),
+                    )
+                    .padding(8)
+                    .style(iced::theme::Container::Box)
+                    .width(Length::Fill)
+                );
+            }
             column![
-                tab_bar,
+                text("Chapters from Audible")
+                    .size(20)
+                    .style(iced::theme::Text::Color(app.palette().background.base.text)),
+                text(format!("{} chapters with timestamps — choose an action below.", lookup.len()))
+                    .size(14)
+                    .style(iced::theme::Text::Color(app.palette().background.weak.text)),
+                scrollable(list)
+                    .height(Length::Fill),
+                row![
+                    button("Apply Chapters")
+                        .on_press(Message::ChapterLookupApply)
+                        .style(iced::theme::Button::custom(crate::ui::theme::RoundedPrimary(app.theme_id)))
+                        .padding([12, 20]),
+                    button("Map Chapter Titles")
+                        .on_press(Message::MapChapterTitlesOnly)
+                        .style(iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id)))
+                        .padding([12, 20]),
+                    button("Cancel")
+                        .on_press(Message::ChapterLookupCancel)
+                        .style(iced::theme::Button::custom(crate::ui::theme::RoundedSecondary(app.theme_id)))
+                        .padding([12, 20]),
+                ]
+                .spacing(12)
+                .align_items(Alignment::Center),
+            ]
+            .spacing(16)
+            .padding(20)
+            .into()
+        } else {
+            column![
                 Space::with_height(Length::Fixed(6.0)),
                 asin_input_section,
                 Space::with_height(Length::Fixed(6.0)),
                 top_controls,
                 duration_warning,
-                lookup_pending_section,
                 shift_controls,
                 Space::with_height(Length::Fixed(6.0)),
                 header,
                 chapter_list_content,
                 Space::with_height(Length::Fixed(6.0)),
                 status,
+            ]
+            .spacing(6)
+            .into()
+        };
+
+        container(
+            column![
+                tab_bar,
+                main_content,
             ]
             .spacing(6)
             .height(Length::Fill),

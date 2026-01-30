@@ -407,12 +407,11 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                     .unwrap_or(chapter.duration);
                 let remaining_duration_ms = file_duration_ms.saturating_sub(start_time_ms);
                 
-                // Use chapter duration if set (capped at 30s for preview), otherwise default to 30 seconds
-                // Then respect remaining file duration and ensure at least 1 second
+                // Preview: at least 10s so short chapters don't stop after 1–2s, cap at 30s
                 let effective_duration = if chapter.duration > 0 {
-                    chapter.duration.min(30000) // Cap chapter duration at 30s for preview
+                    chapter.duration.max(10000).min(30000)
                 } else {
-                    30000 // Default 30 seconds for user-created chapters without duration
+                    30000
                 };
                 let preview_duration_ms = Some(effective_duration.min(remaining_duration_ms).max(1000));
                 
@@ -522,9 +521,13 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                         ));
                     }
                     
-                    // Check duration
+                    // Stop after same duration we told the player (min 10s, max 30s)
                     let chapter = &app.chapters.chapters[state.chapter_index];
-                    let max_duration = chapter.duration.min(30000);
+                    let max_duration = if chapter.duration > 0 {
+                        chapter.duration.max(10000).min(30000)
+                    } else {
+                        30000
+                    };
                     if state.elapsed_ms >= max_duration {
                         if let Some(process_handle) = app.chapter_playback_process.take() {
                             let process = process_handle.clone();
@@ -675,6 +678,11 @@ pub fn handle_chapters(app: &mut Lectern, message: Message) -> Option<Command<Me
                 }
                 println!("[DEBUG] Mapped {} titles to existing chapters (timestamps unchanged)", n);
             }
+            Some(Command::none())
+        }
+        Message::ChapterLookupCancel => {
+            app.chapters.lookup_result = None;
+            app.chapters.lookup_duration_ms = None;
             Some(Command::none())
         }
         Message::ChapterLookupCompleted(gen, Err(e)) => {

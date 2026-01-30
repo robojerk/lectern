@@ -2,39 +2,62 @@
 
 An Iced-based desktop application for preparing audiobooks for Audiobookshelf servers. Lectern automates the conversion of MP3 directories into properly tagged M4B files with direct upload to your Audiobookshelf server.
 
+This app takes A LOT of inspiration from Audiobookshelf
+
+## Status
+
+- This app needs a lot of ironing out. Image loading is slow but works \
+- Metadata search, editing seems to work.  Image loading on search is slow \
+- Cover art seems to work (image loasing is slow) \
+- Chapter editing.  This needs a lot more work. \
+- Conversion.  Seems to work, \
+- Upload to ABS through API.  Untested. \
+- Themes: I used iced because I never used it.  Discovered drag and drop is not functional on Wayland. And I felt the app was ugly. I asked Gemini to make it so I could create some theme.  Hopesully someone who knows rust and making apps prettier than I does something with that.
+
 ## Features
 
-✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app
-✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information  
-✅ **Editable Metadata** - Review and modify title, author, series, and narrator  
-✅ **Chapter Management** - Create, edit, and manage chapter markers with playback preview  
-✅ **Cover Art Search** - Search and download cover images from multiple sources  
-✅ **M4B Conversion** - High-quality AAC encoding with FFmpeg  
-✅ **Metadata Tagging** - Embeds metadata during FFmpeg conversion  
-✅ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan  
-✅ **Real-Time Logging** - See exactly what's happening during processing  
-✅ **Progress Tracking** - Visual feedback throughout the conversion pipeline
+✅ **Drag-and-Drop Interface** - Simply drag your audiobook folder into the app (on xorg or xWayland only) \
+✅ **Automatic Metadata Fetching** - Queries Audnexus API for book information  \
+✅ **Editable Metadata** - Review and modify title, author, series, and narrator \ 
+⚠️ **Chapter Management** - Create, edit, and manage chapter markers with playback preview. Needs some work
+✅ **Cover Art Search** - Search and download cover images from multiple sources  \
+✅ **M4B Conversion** - High-quality AAC encoding with FFmpeg  \
+✅ **Metadata Tagging** - Embeds metadata during FFmpeg conversion  \
+❌ **Direct Upload** - Uploads to Audiobookshelf and triggers library scan  (This is untested) \
+✅ **UI Themes** - Iced is ugly.  I asked Gemini to make it themable.
 
 ## Project Structure
 
 ```
 lectern/
-├── Cargo.toml              # Rust dependencies
+├── Cargo.toml
 ├── src/
-│   ├── main.rs            # Application entry point
-│   ├── models/            # Data models (chapters, metadata)
-│   ├── services/          # Business logic (conversion, playback, ffprobe)
-│   ├── ui/                # UI layer
-│   │   ├── handlers/      # Message handlers for each feature
-│   │   ├── views/         # UI view components
-│   │   ├── state/         # Application state management
-│   │   ├── colors.rs      # Color theme definitions
-│   │   └── helpers.rs     # UI helper functions
-│   └── utils/             # Utility functions (formatting, time)
-├── assets/                # Icons and images
+│   ├── main.rs
+│   ├── config.rs
+│   ├── models/            # chapters, metadata
+│   ├── services/          # conversion, ffprobe, playback
+│   ├── services.rs
+│   ├── ui/
+│   │   ├── handlers/       # per-feature message handlers
+│   │   ├── views/         # search, metadata, chapters, cover, convert, settings
+│   │   ├── state/         # application state
+│   │   ├── theme/         # Breeze, Nordic, Candy, Windows11, styles
+│   │   ├── colors.rs
+│   │   ├── cover_search.rs
+│   │   ├── helpers.rs
+│   │   ├── icons.rs
+│   │   └── theme_settings.rs
+│   └── utils/             # chapter_file, format, time
+├── assets/
 │   └── png/               # Material Symbols icons
-├── .gitignore             # Git ignore rules
-└── README.md              # This file
+├── packaging/
+│   └── lectern_x11_wrapper.c   # X11 launcher (ELF) for AppImage
+├── docs/
+├── issue/
+├── license                 # GPL v3
+├── run_lectern.sh
+├── run_lectern_x11.sh
+└── README.md
 ```
 
 ## System Requirements
@@ -105,14 +128,14 @@ sudo cp target/release/lectern /usr/local/bin/
 
 ### AppImage (Portable)
 
-An AppImage is available for easy distribution. See [APPDIRECTORY.md](APPDIRECTORY.md) for build instructions.
+An AppImage is available for easy distribution. The GitHub workflow (`.github/workflows/build-appimage.yml`) builds it on tag push; see [APPDIRECTORY.md](APPDIRECTORY.md) for details.
 
 To use a pre-built AppImage:
-1. Download the `.AppImage` file
+1. Download the `.AppImage` file from the releases page
 2. Make it executable: `chmod +x Lectern-*.AppImage`
 3. Run it: `./Lectern-*.AppImage`
 
-The AppImage bundles all dependencies including FFmpeg, so no system installation is required.
+The AppImage bundles FFmpeg and runs under **X11** (Wayland is disabled so drag-and-drop and windowing behave consistently). No system installation is required.
 
 ## How It Works
 
@@ -229,7 +252,7 @@ The application follows a modular architecture:
 
 ## License
 
-MIT License - Feel free to use and modify as needed.
+Lectern is licensed under the **GNU General Public License v3.0**. See the [license](license) file for the full text.
 
 ### Third-Party Licenses
 
